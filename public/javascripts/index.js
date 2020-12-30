@@ -71,6 +71,7 @@ function insertMsg(msg) {
   line.className = 'line'
   line.innerHTML = msg
   contentDom.appendChild(line)
+  contentDom.scrollTop = contentDom.scrollHeight //滚动条到最底部
 }
 
 // 初始化在线人
