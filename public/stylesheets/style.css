@@ -18,11 +18,13 @@ a {
   width:300px;
   height:100%;
   overflow: auto;
+  scroll-snap-type: y mandatory;
 }
 
 .line{
   margin: 5px;
-  border-bottom: 1px solid ;
+  border-bottom: 1px solid;
+  scroll-snap-align: end;
 }
 
 .list{
