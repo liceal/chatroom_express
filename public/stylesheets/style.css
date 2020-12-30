@@ -24,7 +24,7 @@ a {
 .line{
   margin: 5px;
   border-bottom: 1px solid;
-  scroll-snap-align: end;
+  scroll-snap-align: center;
 }
 
 .list{

@@ -107,6 +107,7 @@ function showAlert(msg = "弹窗消息", type = "success") {
   alertDom = $(alertDom)
 
   setTimeout(() => {
+    alertDom.addClass('fade')
     alertDom.alert('close')
   }, 3000)
 }
