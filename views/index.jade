@@ -10,6 +10,12 @@ block content
 
   h1= 'socket聊天室 | '
     a(href="https://github.com/liceal/chatroom_express") Github
+
+  div
+    a(href="javascript:;" class="a-upload")
+      input(type="file" value="images" id="sendFile")
+      | 发送图片
+
   input(id="sendMsg" type="text" onkeydown="enterSend(event)")
   button(onclick="send()") 发送
   span(id="user" style="margin-left:10px;white-space: nowrap;")

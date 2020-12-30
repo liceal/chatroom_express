@@ -43,3 +43,14 @@ a {
 .alert{
   margin-bottom: 5px !important;
 }
+
+/*a  upload */
+.a-upload {
+  position: relative;
+}
+
+.a-upload  input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer
+}

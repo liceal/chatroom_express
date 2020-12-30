@@ -46,6 +46,44 @@ window.onload = () => {
     insertMsg(data.msg)
   })
 
+  //接收文件
+  socket.on('file', (data) => {
+    console.log('接收文件', data);
+    insertImage(data.file)
+  })
+
+  //选择文件
+  $('#sendFile').change(function (event) {
+    console.log(this.files);
+    if (this.files.length !== 0) {
+      var file = this.files[0];
+      //判断文件是否为图片
+      if (!/image\/\w+/.test(file.type)) {
+        alert('文件必须为图片！')
+        return
+      } else if (file.size > 2097152) {
+        alert('上传图片请小于2M')
+        return
+      }
+      reader = new FileReader();
+      if (!reader) {
+        alert('文件读取失败')
+        return
+      }
+      reader.onload = function (e) {
+        //资源加载完 发送base64资源
+        console.log('资源文件', e);
+        let data = {
+          file: e.target.result
+        }
+        socket.emit('file', data)
+        insertImage(data.file)
+        event.target.value = ""//清空资源,这样可以进行下次上传，注意event是onchange给的回调
+      }
+      reader.readAsDataURL(file)
+    }
+  })
+
 }
 
 //回车发送消息
@@ -65,13 +103,26 @@ function send() {
   socket.emit('message', sendMsg)
 }
 
-//插入消息队列
-function insertMsg(msg) {
+//插入消息队列 0文字消息，1图片文件
+function insertMsg(msg, type = 0) {
   let line = document.createElement('div')
   line.className = 'line'
-  line.innerHTML = msg
+  if (type === 0) {
+    line.innerHTML = msg
+  } else if (type === 1) {
+    line.appendChild(msg)
+  }
   contentDom.appendChild(line)
   contentDom.scrollTop = contentDom.scrollHeight //滚动条到最底部
+}
+
+//插入图片消息
+function insertImage(file) {
+  // console.log(file);
+  let imgDom = document.createElement('img')
+  imgDom.src = file
+  imgDom.style.maxHeight = '200px'
+  insertMsg(imgDom, 1)
 }
 
 // 初始化在线人

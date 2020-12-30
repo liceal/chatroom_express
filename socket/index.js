@@ -23,6 +23,12 @@ io.on('connection', function (socket) {
     _id: socket.id
   })
 
+  //* 资源文件
+  socket.on('file', (data) => {
+    //广播发送给其他人
+    socket.broadcast.emit('file', data)
+  })
+
   //* 广播消息
   socket.on('message', (msg) => {
     console.log('收到客户端的消息：', msg);
@@ -38,8 +44,6 @@ io.on('connection', function (socket) {
     Object.keys(repalce2Msg).forEach(v => {
       msg = msg.replace(new RegExp(v, 'g'), repalce2Msg[v])
     })
-    // msg.replace(/['傻逼','废物','你妈']/g, '***')
-
     let sendMsg = {
       msg: msg,
       _id: socket.id
