@@ -26,10 +26,25 @@ io.on('connection', function (socket) {
   //* 广播消息
   socket.on('message', (msg) => {
     console.log('收到客户端的消息：', msg);
+    //对收到的消息进行正则匹配，过滤掉敏感字
+    let repalce2Msg = {
+      '傻逼': '天才',
+      '废物': '圣物',
+      '你妈': '我妈',
+      '尼玛': '我妈',
+      '丑逼': '帅哥',
+      '[傻逼妈爸爹儿]': '*'
+    }
+    Object.keys(repalce2Msg).forEach(v => {
+      msg = msg.replace(new RegExp(v, 'g'), repalce2Msg[v])
+    })
+    // msg.replace(/['傻逼','废物','你妈']/g, '***')
+
     let sendMsg = {
       msg: msg,
       _id: socket.id
     }
+
     socket.emit('message', sendMsg)
     //广播发送消息 除了自己
     socket.broadcast.emit('message', sendMsg)
