@@ -162,3 +162,8 @@ function showAlert(msg = "弹窗消息", type = "success") {
     alertDom.alert('close')
   }, 3000)
 }
+
+//清空信息
+function clearMsg() {
+  contentDom.innerHTML = ""
+}
