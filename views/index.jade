@@ -1,0 +1,23 @@
+extends layout
+
+block head
+  script(src="/javascripts/index.js")
+
+
+block content
+
+  //- .alert.alert-success(role='alert')
+  //-   button.close(type='button' data-dismiss='alert' aria-label='Close')
+  //-     span(aria-hidden='true') ×
+  //-   strong Warning!
+  //-   |  Better check yourself, you're not looking too good.
+
+  div(id="alert-container" class="alert-container")
+
+  h1= 'socket聊天室'
+  input(id="sendMsg" type="text" onkeydown="enterSend(event)")
+  button(onclick="send()") 发送
+  span(id="user" style="margin-left:10px")
+  div(class="container1")
+    div(id="content" class="content")
+    div(id="list" class="list")

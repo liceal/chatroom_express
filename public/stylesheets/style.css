@@ -1,0 +1,43 @@
+body {
+  padding: 50px;
+  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+}
+
+a {
+  color: #00B7FF;
+}
+
+.container1{
+  padding-top: 20px;
+  height: 300px;
+  display: flex;
+}
+
+.content{
+  border:1px solid;
+  width:300px;
+  height:100%;
+  overflow: auto;
+}
+
+.line{
+  margin: 5px;
+  border-bottom: 1px solid ;
+}
+
+.list{
+  margin-left: 5px;
+  border: 1px solid ;
+  width: 200px;
+  height: 100%;
+}
+
+.alert-container{
+  top: 5px;
+  position: fixed;
+  right: 5px;
+}
+
+.alert{
+  margin-bottom: 5px !important;
+}
