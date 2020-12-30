@@ -33,7 +33,7 @@ io.on('connection', function (socket) {
       '你妈': '我妈',
       '尼玛': '我妈',
       '丑逼': '帅哥',
-      '[傻逼妈爸爹儿]': '*'
+      '[傻逼爸爹儿]': '*'
     }
     Object.keys(repalce2Msg).forEach(v => {
       msg = msg.replace(new RegExp(v, 'g'), repalce2Msg[v])
