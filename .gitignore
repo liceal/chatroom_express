@@ -1,4 +1,5 @@
 .DS_Store
 node_modules/
 dist/
-# public/file/*
+/public/file/*
+!public/file/.gitkeep
