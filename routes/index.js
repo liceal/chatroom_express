@@ -30,7 +30,7 @@ router.post('/file', upload.single('file'), function (req, res, next) {
 //* 删除资源文件
 router.delete('/file', function (req, res, next) {
   console.log('删除文件', req.query);
-  fs.unlink(`public/file/${req.query.fileName}`, (err) => {
+  fs.unlink(`${__dirname}/../public/file/${req.query.fileName}`, (err) => {
     if (err) {
       console.log(err);
       res.send({

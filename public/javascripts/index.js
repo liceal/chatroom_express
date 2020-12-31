@@ -55,9 +55,9 @@ window.onload = () => {
   })
 
   //接收资源列表
-  // socket.on('file-list-paths', (data) => {
-  //   initFilePaths(data.fileList)
-  // })
+  socket.on('file-list-paths', (data) => {
+    initFilePaths(data.fileList)
+  })
 
   //选择图片
   $('#sendImage').change(function (event) {

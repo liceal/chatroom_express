@@ -25,7 +25,7 @@ io.on('connection', function (socket) {
   })
 
   //* 广播所有附件地址
-  // sendAllFiles(socket)
+  sendAllFiles(socket)
 
   //* 有人文件上传成功或者文件被删除时候，广播所有用户刷新当前资源列表
   socket.on('file-upload-change', (data) => {
@@ -85,7 +85,7 @@ function roomsArray(socket) {
 
 //* 读取资源文件列表并且广播给所有人，包括自己
 function sendAllFiles(socket, nowUploadFile = null) {
-  fs.readdir('public/file', (err, files) => {
+  fs.readdir(__dirname + '/../public/file', (err, files) => {
     let fileList = files.map(v => {
       return {
         path: `/file/${v}`,
