@@ -86,7 +86,8 @@ function roomsArray(socket) {
 //* 读取资源文件列表并且广播给所有人，包括自己
 function sendAllFiles(socket, nowUploadFile = null) {
   fs.readdir(__dirname + '/../public/file', (err, files) => {
-    let fileList = files.map(v => {
+    //? 获取资源文件，排除.开头的资源 比如.gitkeep
+    let fileList = files.filter(v => v[0] !== '.').map(v => {
       return {
         path: `/file/${v}`,
         name: v.split('--')[1],
