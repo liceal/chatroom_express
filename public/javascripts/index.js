@@ -1,6 +1,7 @@
 var sendMsgInput = null
 var contentDom = null
 var listDom = null
+var filesDom = null
 var userDom = null
 var socket = null
 var list = null
@@ -15,6 +16,7 @@ window.onload = () => {
   contentDom = $('#content')[0]
   sendMsgInput = $('#sendMsg')[0]
   listDom = $('#list')[0]
+  filesDom = $('#files')[0]
 
   //连接成功
   socket.on('connected', (data) => {
@@ -46,14 +48,19 @@ window.onload = () => {
     insertMsg(data.msg)
   })
 
-  //接收文件
-  socket.on('file', (data) => {
+  //接收图片base64
+  socket.on('image', (data) => {
     console.log('接收文件', data);
     insertImage(data.file)
   })
 
-  //选择文件
-  $('#sendFile').change(function (event) {
+  //接收资源列表
+  socket.on('file-list-paths', (data) => {
+    initFilePaths(data.fileList)
+  })
+
+  //选择图片
+  $('#sendImage').change(function (event) {
     console.log(this.files);
     if (this.files.length !== 0) {
       var file = this.files[0];
@@ -65,6 +72,7 @@ window.onload = () => {
         alert('上传图片请小于2M')
         return
       }
+
       reader = new FileReader();
       if (!reader) {
         alert('文件读取失败')
@@ -76,12 +84,31 @@ window.onload = () => {
         let data = {
           file: e.target.result
         }
-        socket.emit('file', data)
+        socket.emit('image', data)
         insertImage(data.file)
         event.target.value = ""//清空资源,这样可以进行下次上传，注意event是onchange给的回调
       }
       reader.readAsDataURL(file)
     }
+  })
+
+  //发送附件
+  $('#sendFile').change(function (event) {
+    console.log(this.files);
+    if (this.files.length !== 0) {
+      var file = this.files[0]
+      var fd = new FormData()
+      fd.append('file', file)
+      //! 注意不用加header 否则会报错
+      fetch('/file', {
+        method: 'post',
+        body: fd
+      }).then(res => res.json()).then(res => {
+        console.log('文件上传成功，文件信息：', res);
+        socket.emit('file-upload-change', res.file)
+      })
+    }
+
   })
 
 }
@@ -139,6 +166,45 @@ function initRooms(rooms) {
   })
   listDom.appendChild(lines)
 
+}
+
+// 删除资源
+function delFile(fileName) {
+  console.log(fileName);
+  fetch(`/file?fileName=${fileName}`, {
+    method: 'delete',
+  }).then(res => res.json()).then(res => {
+    if (res.status === 200) {
+      console.log('文件删除成功');
+      showAlert('文件删除成功')
+      // 发送删除成功socket 广播所有人
+      socket.emit('file-upload-change', res.file)
+    } else if (res.status === 500) {
+      // 文件删除失败 不做任何处理
+      console.log('文件删除失败');
+      showAlert('文件删除失败', 'danger')
+    }
+  })
+}
+
+// 初始化文件列表
+function initFilePaths(files) {
+  console.log('资源', files);
+  filesDom.innerHTML = ""
+  let lines = document.createElement('div')
+  lines.id = 'lines'
+  files.forEach(v => {
+    let line = document.createElement('div')
+    line.className = 'line'
+    line.innerHTML = `
+    ${v.date}
+    <br>
+    <a href="${v.path}" download="${v.name}">${v.name}</a>
+    <b style="float: right;cursor: pointer;" onclick="delFile('${v.originalname}')">x</b>
+    `
+    lines.appendChild(line)
+  })
+  filesDom.appendChild(lines)
 }
 
 //弹窗

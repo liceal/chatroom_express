@@ -15,7 +15,7 @@ a {
 
 .content{
   border:1px solid;
-  width:300px;
+  width:50vw;
   height:100%;
   overflow: auto;
   scroll-snap-type: y mandatory;
@@ -30,8 +30,9 @@ a {
 .list{
   margin-left: 5px;
   border: 1px solid ;
-  width: 200px;
+  width: calc(25vw - 5px);
   height: 100%;
+  overflow: auto;
 }
 
 .alert-container{

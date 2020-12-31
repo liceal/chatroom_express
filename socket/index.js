@@ -1,10 +1,11 @@
 //? 引入本体 后面()执行方法，默认监听端口为服务本身
 var io = require('socket.io')()
+var fs = require('fs')
+var moment = require('moment')
 
 //? 正常使用即可
 console.log('connected');
 io.on('connection', function (socket) {
-
   console.log('连接成功');
 
   // console.log(rooms);
@@ -23,10 +24,21 @@ io.on('connection', function (socket) {
     _id: socket.id
   })
 
-  //* 资源文件
-  socket.on('file', (data) => {
+  //* 广播所有附件地址
+  sendAllFiles(socket)
+
+  //* 有人文件上传成功或者文件被删除时候，广播所有用户刷新当前资源列表
+  socket.on('file-upload-change', (data) => {
+    // console.log('有人文件上传成功', '上传成功的文件:', data);
+    // socket.broadcast.emit('fileList')
+    //读取所有资源文件
+    sendAllFiles(socket, data)
+  })
+
+  //* 图片base64
+  socket.on('image', (data) => {
     //广播发送给其他人
-    socket.broadcast.emit('file', data)
+    socket.broadcast.emit('image', data)
   })
 
   //* 广播消息
@@ -64,10 +76,31 @@ io.on('connection', function (socket) {
   })
 })
 
-//当前连接者，参数socket实例
+//* 当前连接者，参数socket实例
 function roomsArray(socket) {
   return [...socket.adapter.rooms].map((v) => {
     return v[0]
+  })
+}
+
+//* 读取资源文件列表并且广播给所有人，包括自己
+function sendAllFiles(socket, nowUploadFile = null) {
+  fs.readdir('public/file', (err, files) => {
+    let fileList = files.map(v => {
+      return {
+        path: `/file/${v}`,
+        name: v.split('--')[1],
+        date: moment(Number(v.split('--')[0])).format('YYYY-MM-DD HH:mm:ss'),
+        originalname: v
+      }
+    })
+    let data = {
+      nowUploadFile: nowUploadFile,
+      fileList: fileList,
+    }
+    //广播给所有人最新的资源列表 包括自己
+    socket.emit('file-list-paths', data)
+    socket.broadcast.emit('file-list-paths', data)
   })
 }
 
