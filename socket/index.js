@@ -2,6 +2,7 @@
 var io = require('socket.io')()
 var fs = require('fs')
 var moment = require('moment')
+var msgList = []
 
 //? 正常使用即可
 console.log('connected');
@@ -10,17 +11,21 @@ io.on('connection', function (socket) {
 
   // console.log(rooms);
   const rooms = roomsArray(socket);
+  //* 初始广播至少10条信息
+
 
   //* 连接成功
   socket.emit('connected', {
     msg: `${socket.id} 连接成功⭕`,
     rooms: rooms,
+    msgList: msgList,
     _id: socket.id
   })
 
   //* 广播所有房间信息
   socket.broadcast.emit('rooms', {
     rooms: rooms,
+    msgList: msgList,
     _id: socket.id
   })
 
@@ -56,6 +61,11 @@ io.on('connection', function (socket) {
     Object.keys(repalce2Msg).forEach(v => {
       msg = msg.replace(new RegExp(v, 'g'), repalce2Msg[v])
     })
+    //加入msgList
+    if (msgList.length >= 10) {
+      msgList.shift()
+    }
+    msgList.push(msg)
     let sendMsg = {
       msg: msg,
       _id: socket.id

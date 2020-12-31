@@ -23,7 +23,10 @@ window.onload = () => {
     console.log('连接成功', data);
     userDom = $('#user')[0];
     userDom.innerHTML = `ID：${data._id}`;
-    // insertMsg(data.msg)
+    //* 渲染msgList历史数据
+    data.msgList.forEach(v => {
+      insertMsg(v)
+    })
     initRooms(data.rooms)
     showAlert(`你的ID是：<strong>${data._id}</strong>`, 'info')
   })
