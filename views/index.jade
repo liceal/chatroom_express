@@ -19,11 +19,15 @@ block content
   div
     a(href="javascript:;" class="a-upload")
       input(type="file" value="images" id="sendImage")
-      | 发送图片
+      | 发送图片文件
 
-  input(id="sendMsg" type="text" onkeydown="enterSend(event)")
+  //- input(id="sendMsg" type="text" onkeydown="enterSend(event)")
+  br
+  div(contenteditable id="sendMsgDiv" type="text" class="inputDiv")
+  br
+  
   button(onclick="send()") 发送
-  button(onclick="clearMsg()") 清空消息
+  button(onclick="clearMsg()") 清空聊天
   span(id="user" style="margin-left:10px;white-space: nowrap;")
   div(class="container1")
     div(id="content" class="content")

@@ -1,4 +1,5 @@
 var sendMsgInput = null
+var sendMsgDiv = null
 var contentDom = null
 var listDom = null
 var filesDom = null
@@ -15,6 +16,7 @@ window.onload = () => {
 
   contentDom = $('#content')[0]
   sendMsgInput = $('#sendMsg')[0]
+  sendMsgDiv = $('#sendMsgDiv')[0]
   listDom = $('#list')[0]
   filesDom = $('#files')[0]
 
@@ -123,13 +125,16 @@ function enterSend(event) {
   }
 }
 
-//发送消息
+//发送消息 这里改成div节点所以监听innerHTML
 function send() {
-  let sendMsg = sendMsgInput.value
+  // let sendMsg = sendMsgInput.value
+  let sendMsg = sendMsgDiv.innerHTML
+  console.log(sendMsgDiv.innerHTML);
   if (sendMsg === "") {
     return
   }
-  sendMsgInput.value = ""
+  // sendMsgInput.value = ""
+  sendMsgDiv.innerHTML = ""
   socket.emit('message', sendMsg)
 }
 
