@@ -25,8 +25,8 @@ window.onload = () => {
     console.log('连接成功', data);
     userDom = $('#user')[0];
     userDom.innerHTML = `ID：${data._id}`;
-    //* 渲染msgList历史数据
-    data.msgList.forEach(v => {
+    //* 渲染historyList历史数据
+    data.historyList.forEach(v => {
       insertMsg(v)
     })
     initRooms(data.rooms)
@@ -238,6 +238,7 @@ function showAlert(msg = "弹窗消息", type = "success") {
 }
 
 //清空信息
-function clearMsg() {
+function clearHistory() {
   contentDom.innerHTML = ""
+  socket.emit('clearHistory')
 }

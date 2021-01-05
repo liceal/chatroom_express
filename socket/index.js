@@ -2,7 +2,8 @@
 var io = require('socket.io')()
 var fs = require('fs')
 var moment = require('moment')
-var msgList = []
+var historyList = []
+var historyLength = 10 //? 历史记录保存条数
 
 //? 正常使用即可
 console.log('connected');
@@ -11,21 +12,19 @@ io.on('connection', function (socket) {
 
   // console.log(rooms);
   const rooms = roomsArray(socket);
-  //* 初始广播至少10条信息
-
 
   //* 连接成功
   socket.emit('connected', {
     msg: `${socket.id} 连接成功⭕`,
     rooms: rooms,
-    msgList: msgList,
+    historyList: historyList,
     _id: socket.id
   })
 
   //* 广播所有房间信息
   socket.broadcast.emit('rooms', {
     rooms: rooms,
-    msgList: msgList,
+    historyList: historyList,
     _id: socket.id
   })
 
@@ -61,11 +60,11 @@ io.on('connection', function (socket) {
     Object.keys(repalce2Msg).forEach(v => {
       msg = msg.replace(new RegExp(v, 'g'), repalce2Msg[v])
     })
-    //加入msgList
-    if (msgList.length >= 10) {
-      msgList.shift()
+    //? 加入historyList 最多保存十条消息
+    if (historyList.length >= historyLength) {
+      historyList.shift()
     }
-    msgList.push(msg)
+    historyList.push(msg)
     let sendMsg = {
       msg: msg,
       _id: socket.id
@@ -83,6 +82,13 @@ io.on('connection', function (socket) {
       rooms: roomsArray(socket),
       _id: socket.id
     })
+  })
+
+  //* 清空历史记录
+  socket.on('clearHistory', (data) => {
+    //点击清空聊天的人ID
+    console.log('清空聊天记录人的ID:', socket.id);
+    historyList = []
   })
 })
 
