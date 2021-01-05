@@ -129,7 +129,7 @@ function enterSend(event) {
 function send() {
   // let sendMsg = sendMsgInput.value
   let sendMsg = sendMsgDiv.innerHTML
-  console.log(sendMsgDiv.innerHTML);
+  // console.log(sendMsgDiv.innerHTML);
   if (sendMsg === "") {
     return
   }
