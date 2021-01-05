@@ -42,6 +42,13 @@ io.on('connection', function (socket) {
   //* 图片base64
   socket.on('image', (data) => {
     //广播发送给其他人
+    if (historyList.length >= historyLength) {
+      historyList.shift()
+    }
+    historyList.push({
+      msg: data.file,
+      type: 1
+    })
     socket.broadcast.emit('image', data)
   })
 
@@ -64,7 +71,10 @@ io.on('connection', function (socket) {
     if (historyList.length >= historyLength) {
       historyList.shift()
     }
-    historyList.push(msg)
+    historyList.push({
+      msg: msg,
+      type: 0
+    })
     let sendMsg = {
       msg: msg,
       _id: socket.id

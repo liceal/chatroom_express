@@ -27,7 +27,7 @@ window.onload = () => {
     userDom.innerHTML = `ID：${data._id}`;
     //* 渲染historyList历史数据
     data.historyList.forEach(v => {
-      insertMsg(v)
+      insertMsg(v.msg, v.type)
     })
     initRooms(data.rooms)
     showAlert(`你的ID是：<strong>${data._id}</strong>`, 'info')
@@ -56,7 +56,7 @@ window.onload = () => {
   //接收图片base64
   socket.on('image', (data) => {
     console.log('接收文件', data);
-    insertImage(data.file)
+    insertMsg(data.file, 1)
   })
 
   //接收资源列表
@@ -90,7 +90,7 @@ window.onload = () => {
           file: e.target.result
         }
         socket.emit('image', data)
-        insertImage(data.file)
+        insertMsg(data.file, 1)
         event.target.value = ""//清空资源,这样可以进行下次上传，注意event是onchange给的回调
       }
       reader.readAsDataURL(file)
@@ -145,19 +145,13 @@ function insertMsg(msg, type = 0) {
   if (type === 0) {
     line.innerHTML = msg
   } else if (type === 1) {
-    line.appendChild(msg)
+    let imgDom = document.createElement('img')
+    imgDom.src = msg
+    imgDom.style.maxHeight = '200px'
+    line.appendChild(imgDom)
   }
   contentDom.appendChild(line)
   contentDom.scrollTop = contentDom.scrollHeight //滚动条到最底部
-}
-
-//插入图片消息
-function insertImage(file) {
-  // console.log(file);
-  let imgDom = document.createElement('img')
-  imgDom.src = file
-  imgDom.style.maxHeight = '200px'
-  insertMsg(imgDom, 1)
 }
 
 // 初始化在线人
