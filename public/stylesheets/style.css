@@ -63,3 +63,8 @@ a {
   display: inline-block;
   min-width: 300px;
 }
+
+.inputDiv:empty:before{ 
+  content: '可以粘贴截图,带属性的字体等信息.'; 
+  color: gray; 
+} 
