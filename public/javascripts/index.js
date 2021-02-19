@@ -147,7 +147,6 @@ function insertMsg(msg, type = 0) {
   } else if (type === 1) {
     let imgDom = document.createElement('img')
     imgDom.src = msg
-    imgDom.style.maxHeight = '200px'
     line.appendChild(imgDom)
   }
   contentDom.appendChild(line)

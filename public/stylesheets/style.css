@@ -18,13 +18,17 @@ a {
   width:50vw;
   height:100%;
   overflow: auto;
-  scroll-snap-type: y mandatory;
+  /* scroll-snap-type: y mandatory; */
 }
 
 .line{
   margin: 5px;
   border-bottom: 1px solid;
-  scroll-snap-align: center;
+  /* scroll-snap-align: center; */
+}
+
+.line img{
+  max-height: 200px;
 }
 
 .list{
