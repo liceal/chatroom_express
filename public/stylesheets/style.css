@@ -4,48 +4,53 @@ body {
 }
 
 a {
-  color: #00B7FF;
+  color: #00b7ff;
 }
 
-.container1{
+.container1 {
   padding-top: 20px;
   height: 300px;
   display: flex;
 }
 
-.content{
-  border:1px solid;
-  width:50vw;
-  height:100%;
+.content {
+  border: 1px solid;
+  width: 50vw;
+  height: 100%;
   overflow: auto;
   /* scroll-snap-type: y mandatory; */
 }
 
-.line{
+.line {
   margin: 5px;
   border-bottom: 1px solid;
   /* scroll-snap-align: center; */
 }
 
-.line img{
+.line img {
   max-height: 200px;
 }
 
-.list{
+.line .del {
+  cursor: pointer;
+  margin-right: 5px;
+}
+
+.list {
   margin-left: 5px;
-  border: 1px solid ;
+  border: 1px solid;
   width: calc(25vw - 5px);
   height: 100%;
   overflow: auto;
 }
 
-.alert-container{
+.alert-container {
   top: 5px;
   position: fixed;
   right: 5px;
 }
 
-.alert{
+.alert {
   margin-bottom: 5px !important;
 }
 
@@ -54,21 +59,98 @@ a {
   position: relative;
 }
 
-.a-upload  input {
+.a-upload input {
   position: absolute;
   opacity: 0;
-  cursor: pointer
+  cursor: pointer;
 }
 
-.inputDiv{
-  border : 1px solid ;
+.inputDiv {
+  border: 1px solid;
   padding: 3px;
   min-height: 67px;
   display: inline-block;
   min-width: 300px;
 }
 
-.inputDiv:empty:before{ 
-  content: '可以粘贴截图,带属性的字体等信息.'; 
-  color: gray; 
-} 
+.inputDiv:empty:before {
+  content: "可以粘贴截图,带属性的字体等信息.";
+  color: gray;
+}
+
+.rtc {
+  display: flex;
+  margin-top: 10px;
+  gap: 5px;
+}
+
+.rtc-local {
+  border: 1px solid blue;
+  flex: 1;
+}
+
+.remote-video-list {
+  flex: 1;
+  display: flex;
+}
+.rtc-remote {
+  border: 1px solid green;
+  width: calc(100% - 300px);
+}
+.remote-list {
+  width: 300px;
+  border: 1px solid;
+  border-left: 0px;
+  /* overflow: auto; */
+}
+video {
+  background: black;
+  width: 300px;
+}
+
+.online-id {
+  cursor: pointer;
+}
+.online-id:hover {
+  background: #eee;
+}
+.online-id-active {
+  color: green;
+  cursor: not-allowed;
+  position: relative;
+}
+.online-id-answer {
+  color: pink;
+  cursor: not-allowed;
+  position: relative;
+}
+.online-id-self {
+  color: blue;
+  cursor: not-allowed;
+  position: relative;
+}
+.online-id-tips:hover::before {
+  content: attr(data-title);
+  padding: 0.3em;
+  border-radius: 5%;
+  color: #fff;
+  background: #aaa;
+  position: absolute;
+  width: auto;
+  text-align: center;
+  top: -4ch;
+}
+
+.rtc-remote-list {
+  width: 100%;
+  min-height: 300px;
+  border: 1px solid pink;
+  margin-top: 5px;
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  flex-wrap: wrap;
+}
+.rtc-remote-list-contain {
+  width: 300px;
+}

@@ -1,0 +1,22 @@
+div(class="rtc")
+  div(class="rtc-local")
+    video(id="local-video" playsinline autoplay)
+    div
+      span
+        input(id="audio-checkbox" type="checkbox")
+        label(for="audio-checkbox") 音频
+      span 
+        input(id="video-checkbox" type="checkbox" checked="checked")
+        label(for="video-checkbox") 视频
+      button(id="preview-button") 预览
+      button(id="join-channel-button") 加入频道
+      button(id="leave-channel-button") 退出频道
+
+  div(class="remote-video-list")
+    div(class="rtc-remote")
+      video(id="remote-video" playsinline autoplay)
+    div(id="remote-list" class="remote-list")
+
+div(id="rtc-remote-list" class="rtc-remote-list")
+  
+      
