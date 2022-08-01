@@ -1,0 +1,48 @@
+
+head
+  style.
+    .containers {
+        display: grid;
+        grid-gap: 5px;
+        grid-template-columns: repeat(auto-fit, 1fr);
+        grid-template-rows: repeat(auto-fit, 300px);
+    }
+
+    .container {
+        display: flex;
+    }
+
+    .vid {
+        flex: 0 1 auto;
+        height: 400px;
+    }
+
+    .settings {
+        background-color: #4CAF50;
+        border: none;
+        color: white;
+        padding: 5px 10px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 14px;
+        margin: 2px 2px;
+        cursor: pointer;
+    }
+
+h1 simple peer
+
+body
+  div#videos.container
+    video#localVideo.vid(autoplay='', muted='')
+  br
+  div(style='display:block')
+    button#switchButton.settings(onclick='switchMedia()') Switch Camera
+    button#muteButton.settings(onclick='toggleMute()') Unmuted
+    button#vidButton.settings(onclick='toggleVid()') Video Enabled
+  footer
+    script(src="https://cdn.socket.io/socket.io-3.0.3.js")
+    script(src="/javascripts/simple-peer.js")
+    script(src="/simple-peer/simplepeer.min.js")
+
+
