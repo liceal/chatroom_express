@@ -304,23 +304,181 @@ function insertMsg(msg, type = 0, senderId = null, timeStr = null) {
   contentDom.scrollTop = contentDom.scrollHeight;
 }
 
+// ============ 图片预览器 (缩放 + 拖拽) ============
+// 状态变量
+var imgViewState = {
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  isDragging: false,
+  startX: 0,
+  startY: 0,
+  lastTranslateX: 0,
+  lastTranslateY: 0,
+  // 触摸双指缩放
+  initialPinchDist: 0,
+  initialPinchScale: 1,
+  // 触摸双指平移中心
+  initialPinchCenterX: 0,
+  initialPinchCenterY: 0,
+  initialPinchTranslateX: 0,
+  initialPinchTranslateY: 0,
+};
+
+function resetImgViewState() {
+  imgViewState.scale = 1;
+  imgViewState.translateX = 0;
+  imgViewState.translateY = 0;
+  imgViewState.isDragging = false;
+}
+
+function applyImgTransform() {
+  var modalImg = document.getElementById("modal-img-content");
+  if (modalImg) {
+    modalImg.style.transform =
+      "translate(" + imgViewState.translateX + "px, " + imgViewState.translateY + "px) scale(" + imgViewState.scale + ")";
+  }
+}
+
 // 打开全屏大图预览 Lightbox
 function openImageModal(src) {
-  const modal = document.getElementById("image-modal");
-  const modalImg = document.getElementById("modal-img-content");
+  var modal = document.getElementById("image-modal");
+  var modalImg = document.getElementById("modal-img-content");
   if (modal && modalImg) {
+    resetImgViewState();
     modalImg.src = src;
+    modalImg.style.transform = "";
     modal.classList.remove("hidden");
   }
 }
 
 // 关闭全屏大图预览 Modal
 function closeImageModal() {
-  const modal = document.getElementById("image-modal");
+  var modal = document.getElementById("image-modal");
+  var modalImg = document.getElementById("modal-img-content");
   if (modal) {
     modal.classList.add("hidden");
+    if (modalImg) modalImg.style.transform = "";
+    resetImgViewState();
   }
 }
+
+// ---- 桌面端: 鼠标滚轮缩放 + 鼠标拖拽平移 ----
+(function initDesktopImageZoom() {
+  document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("image-modal");
+    var modalImg = document.getElementById("modal-img-content");
+    if (!modal || !modalImg) return;
+
+    // 滚轮缩放
+    modal.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      var delta = e.deltaY > 0 ? -0.1 : 0.1;
+      imgViewState.scale = Math.min(Math.max(imgViewState.scale + delta, 0.2), 10);
+      applyImgTransform();
+    }, { passive: false });
+
+    // 鼠标拖拽平移
+    modalImg.addEventListener("mousedown", function (e) {
+      if (e.button !== 0) return; // 仅左键
+      e.preventDefault();
+      imgViewState.isDragging = true;
+      imgViewState.startX = e.clientX;
+      imgViewState.startY = e.clientY;
+      imgViewState.lastTranslateX = imgViewState.translateX;
+      imgViewState.lastTranslateY = imgViewState.translateY;
+      modalImg.style.cursor = "grabbing";
+    });
+
+    document.addEventListener("mousemove", function (e) {
+      if (!imgViewState.isDragging) return;
+      imgViewState.translateX = imgViewState.lastTranslateX + (e.clientX - imgViewState.startX);
+      imgViewState.translateY = imgViewState.lastTranslateY + (e.clientY - imgViewState.startY);
+      applyImgTransform();
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (imgViewState.isDragging) {
+        imgViewState.isDragging = false;
+        var img = document.getElementById("modal-img-content");
+        if (img) img.style.cursor = "grab";
+      }
+    });
+
+    // ---- 移动端: 双指捏合缩放 + 单指/双指拖拽平移 ----
+    function getTouchDist(t1, t2) {
+      var dx = t1.clientX - t2.clientX;
+      var dy = t1.clientY - t2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    modalImg.addEventListener("touchstart", function (e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        imgViewState.initialPinchDist = getTouchDist(e.touches[0], e.touches[1]);
+        imgViewState.initialPinchScale = imgViewState.scale;
+        imgViewState.initialPinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        imgViewState.initialPinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        imgViewState.initialPinchTranslateX = imgViewState.translateX;
+        imgViewState.initialPinchTranslateY = imgViewState.translateY;
+      } else if (e.touches.length === 1) {
+        imgViewState.isDragging = true;
+        imgViewState.startX = e.touches[0].clientX;
+        imgViewState.startY = e.touches[0].clientY;
+        imgViewState.lastTranslateX = imgViewState.translateX;
+        imgViewState.lastTranslateY = imgViewState.translateY;
+      }
+    }, { passive: false });
+
+    modalImg.addEventListener("touchmove", function (e) {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        var dist = getTouchDist(e.touches[0], e.touches[1]);
+        var ratio = dist / imgViewState.initialPinchDist;
+        imgViewState.scale = Math.min(Math.max(imgViewState.initialPinchScale * ratio, 0.2), 10);
+        // 双指平移
+        var cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        var cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        imgViewState.translateX = imgViewState.initialPinchTranslateX + (cx - imgViewState.initialPinchCenterX);
+        imgViewState.translateY = imgViewState.initialPinchTranslateY + (cy - imgViewState.initialPinchCenterY);
+        applyImgTransform();
+      } else if (e.touches.length === 1 && imgViewState.isDragging) {
+        e.preventDefault();
+        imgViewState.translateX = imgViewState.lastTranslateX + (e.touches[0].clientX - imgViewState.startX);
+        imgViewState.translateY = imgViewState.lastTranslateY + (e.touches[0].clientY - imgViewState.startY);
+        applyImgTransform();
+      }
+    }, { passive: false });
+
+    modalImg.addEventListener("touchend", function (e) {
+      if (e.touches.length < 2) {
+        imgViewState.initialPinchDist = 0;
+      }
+      if (e.touches.length === 0) {
+        imgViewState.isDragging = false;
+      }
+    });
+
+    // 双击复位
+    var lastTap = 0;
+    modalImg.addEventListener("touchend", function (e) {
+      if (e.touches.length !== 0) return;
+      var now = Date.now();
+      if (now - lastTap < 300) {
+        resetImgViewState();
+        applyImgTransform();
+      }
+      lastTap = now;
+    });
+
+    // 桌面端双击复位
+    modalImg.addEventListener("dblclick", function (e) {
+      e.stopPropagation();
+      resetImgViewState();
+      applyImgTransform();
+    });
+  });
+})();
 
 // 初始化表情包面板
 function initEmojiPicker() {

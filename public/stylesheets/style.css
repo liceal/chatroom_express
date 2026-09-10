@@ -958,6 +958,9 @@ body {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .image-modal.hidden {
   display: none;
@@ -968,8 +971,11 @@ body {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
-  cursor: zoom-out;
+  cursor: grab;
   animation: zoomInImg 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center center;
+  touch-action: none;
+  -webkit-user-drag: none;
 }
 .modal-close-btn {
   position: absolute;
@@ -980,6 +986,7 @@ body {
   cursor: pointer;
   opacity: 0.8;
   transition: opacity 0.2s ease;
+  z-index: 10001;
 }
 .modal-close-btn:hover {
   opacity: 1;

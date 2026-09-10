@@ -118,7 +118,7 @@ block content
         include webrtc
 
     // Fullscreen Image Lightbox Modal
-    div(id="image-modal", class="image-modal hidden", onclick="closeImageModal()")
+    div(id="image-modal", class="image-modal hidden", onclick="if(event.target===this) closeImageModal()")
       span(class="modal-close-btn", onclick="closeImageModal()") &times;
-      img(id="modal-img-content", class="modal-img-content", onclick="event.stopPropagation()")
+      img(id="modal-img-content", class="modal-img-content")
 
