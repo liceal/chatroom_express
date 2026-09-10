@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  chatroom:
+    build: .
+    container_name: chatroom_express
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - UPLOAD_DIR=/app/public/file
+      - MAX_FILE_SIZE=52428800
+    volumes:
+      # 持久化保存上传的文件与日志
+      - ./public/file:/app/public/file
+      - ./logs:/app/logs

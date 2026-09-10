@@ -1,4 +1,4 @@
-peers = {};
+const peers = {};
 
 module.exports = (io) => {
   io.on("connect", (socket) => {

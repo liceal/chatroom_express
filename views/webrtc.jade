@@ -1,22 +1,43 @@
-div(class="rtc")
-  div(class="rtc-local")
-    video(id="local-video" playsinline autoplay)
-    div
-      span
-        input(id="audio-checkbox" type="checkbox")
-        label(for="audio-checkbox") 音频
-      span 
-        input(id="video-checkbox" type="checkbox" checked="checked")
-        label(for="video-checkbox") 视频
-      button(id="preview-button") 预览
-      button(id="join-channel-button") 加入频道
-      button(id="leave-channel-button") 退出频道
+div(class="rtc-container")
+  // Control Panel & Local Video Stream
+  div(class="rtc-local-panel")
+    div(class="video-wrapper local-video-wrapper")
+      video(id="local-video", playsinline, autoplay, muted)
+      div(class="video-label") 本地摄像头 (我)
 
-  div(class="remote-video-list")
-    div(class="rtc-remote")
-      video(id="remote-video" playsinline autoplay)
-    div(id="remote-list" class="remote-list")
+    div(class="rtc-controls")
+      div(class="control-toggles")
+        label(class="toggle-item")
+          input(id="audio-checkbox", type="checkbox", checked)
+          span 开启麦克风
 
-div(id="rtc-remote-list" class="rtc-remote-list")
-  
-      
+        label(class="toggle-item")
+          input(id="video-checkbox", type="checkbox", checked)
+          span 开启摄像头
+
+      div(class="control-actions")
+        button(id="preview-button", class="btn btn-sm btn-primary")
+          i(class="fa-solid fa-camera")
+          | 预览
+        button(id="join-channel-button", class="btn btn-sm btn-success")
+          i(class="fa-solid fa-right-to-bracket")
+          | 加入频道
+        button(id="leave-channel-button", class="btn btn-sm btn-danger", disabled)
+          i(class="fa-solid fa-right-from-bracket")
+          | 退出频道
+
+  // Channel Members List
+  div(class="rtc-channel-members")
+    div(class="panel-sub-header")
+      h4
+        i(class="fa-solid fa-signal")
+        | 频道在线成员 (点击呼叫)
+    div(id="remote-list", class="channel-user-grid")
+
+  // Remote Video Call Grid
+  div(class="rtc-remote-grid-panel")
+    div(class="panel-sub-header")
+      h4
+        i(class="fa-solid fa-video")
+        | 远端视频通话列表
+    div(id="rtc-remote-list", class="rtc-remote-grid")

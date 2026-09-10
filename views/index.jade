@@ -4,36 +4,121 @@ block head
   script(src="/javascripts/index.js")
   script(src="/javascripts/webrtc.js")
 
-
 block content
+  div(id="alert-container", class="alert-container")
 
-  div(id="alert-container" class="alert-container")
+  div(class="app-layout")
+    // Header Navigation
+    header(class="app-header")
+      div(class="header-brand")
+        div(class="brand-title")
+          h1
+            i(class="fa-solid fa-comments brand-logo-icon")
+            | Socket Chat
+          span(class="brand-status")
+            span(class="status-dot")
+            | 实时传输已连接
+      
+      div(class="header-actions")
+        div(class="user-badge", id="user-badge")
+          i(class="fa-solid fa-user-shield")
+          span(id="user") 连接中...
+        
+        button(class="btn btn-outline-danger btn-compact", onclick="clearHistory()", title="清空聊天记录")
+          i(class="fa-solid fa-trash-can")
+          span(class="btn-text") 清空记录
 
-  h1= 'socket聊天室 | '
-    a(href="https://github.com/liceal/chatroom_express",target="_blank") Github
+        button(class="btn btn-outline-primary btn-compact mobile-only", onclick="toggleMobileSidebar()", title="查看在线成员与共享文件")
+          i(class="fa-solid fa-users")
+          span(class="badge badge-header", id="header-online-count") 0
 
-  div
-    a(href="javascript:;" class="a-upload")
-      input(type="file" value="images" id="sendFile")
-      | 上传附件
+        a(class="btn btn-github btn-compact desktop-only", href="https://github.com/liceal/chatroom_express", target="_blank", title="查看源码")
+          i(class="fa-brands fa-github")
+          span(class="btn-text") GitHub
 
-  div
-    a(href="javascript:;" class="a-upload")
-      input(type="file" value="images" id="sendImage")
-      | 发送图片文件
+    // Main App Area
+    main(class="app-main")
+      // Chat Section
+      section(class="chat-section")
+        div(class="chat-messages", id="content")
+          div(class="chat-welcome")
+            i(class="fa-solid fa-shield-cat")
+            p 欢迎来到加密即时通讯房间！聊天记录实时多端同步。
 
-  //- input(id="sendMsg" type="text" onkeydown="enterSend(event)")
-  br
-  div(contenteditable id="sendMsgDiv" type="text" class="inputDiv")
-  br
+        button(id="scroll-bottom-btn", class="scroll-bottom-btn hidden", onclick="scrollToBottom()", title="回底查看最新消息")
+          i(class="fa-solid fa-arrow-down")
 
-  button(onclick="send()") 发送
-  button(onclick="clearHistory()") 清空云端聊天记录
-  span(id="user" style="margin-left:10px;white-space: nowrap;")
-  div(class="container1")
-    div(id="content" class="content")
-    div(id="list" class="list")
-    div(id="files" class="list")
+        div(class="chat-input-wrapper")
+          div(id="emoji-picker", class="emoji-picker hidden")
 
-  //- include webrtc
+          div(class="input-toolbar")
+            button(class="tool-btn", id="emoji-toggle-btn", onclick="toggleEmojiPicker()", title="插入表情包")
+              i(class="fa-regular fa-face-smile")
+              span 表情
+
+            label(class="tool-btn", title="上传文件附件")
+              i(class="fa-solid fa-paperclip")
+              input(type="file", id="sendFile", style="display:none")
+              span 附件
+
+            label(class="tool-btn", title="发送本地图片")
+              i(class="fa-regular fa-image")
+              input(type="file", id="sendImage", accept="image/*", style="display:none")
+              span 图片
+
+            button(class="tool-btn", id="toggle-rtc-btn", onclick="toggleRtcPanel()", title="开启音视频通话")
+              i(class="fa-solid fa-video")
+              span 视频房间
+
+          div(class="input-box-row")
+            div(contenteditable="true", id="sendMsgDiv", class="chat-input", placeholder="输入消息...")
+            button(class="btn-send", onclick="send()", id="sendBtn", title="发送消息")
+              i(class="fa-solid fa-paper-plane")
+              span 发送
+
+      // Mobile Backdrop Overlay
+      div(id="sidebar-overlay", class="sidebar-overlay mobile-only", onclick="toggleMobileSidebar()")
+
+      // Sidebar Panel
+      aside(class="app-sidebar")
+        div(class="mobile-sidebar-header mobile-only")
+          h3
+            i(class="fa-solid fa-users-gear")
+            | 房间控制台
+          button(class="btn-icon", onclick="toggleMobileSidebar()", title="关闭")
+            i(class="fa-solid fa-xmark")
+
+        // Active Users Panel
+        div(class="sidebar-panel")
+          div(class="panel-header")
+            h3
+              i(class="fa-solid fa-users")
+              | 在线成员
+            span(class="badge", id="online-count") 0
+          div(class="panel-body", id="list")
+
+        // File Manager Panel
+        div(class="sidebar-panel")
+          div(class="panel-header")
+            h3
+              i(class="fa-solid fa-folder-open")
+              | 共享文件仓库
+            span(class="badge", id="file-count") 0
+          div(class="panel-body", id="files")
+
+    // WebRTC Video Call Drawer (Hidden by default)
+    div(id="rtc-drawer", class="rtc-drawer hidden")
+      div(class="rtc-drawer-header")
+        h3
+          i(class="fa-solid fa-headset")
+          | WebRTC 音视频频道
+        button(class="btn-icon", onclick="toggleRtcPanel()")
+          i(class="fa-solid fa-xmark")
+      div(class="rtc-drawer-content")
+        include webrtc
+
+    // Fullscreen Image Lightbox Modal
+    div(id="image-modal", class="image-modal hidden", onclick="closeImageModal()")
+      span(class="modal-close-btn", onclick="closeImageModal()") &times;
+      img(id="modal-img-content", class="modal-img-content", onclick="event.stopPropagation()")
 

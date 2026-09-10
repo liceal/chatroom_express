@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "start": "node ./bin/www",
-    "auto": "supervisor ./bin/www"
+    "dev": "node ./bin/www",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:logs": "pm2 logs chatroom-express"
   },
   "dependencies": {
     "cookie-parser": "~1.4.4",

@@ -1,239 +1,566 @@
-var sendMsgInput = null;
 var sendMsgDiv = null;
 var contentDom = null;
 var listDom = null;
 var filesDom = null;
 var userDom = null;
 var socket = null;
-var list = null;
 var localID = null;
+
+// 常用表情包列表
+const EMOJI_LIST = [
+  "😀", "😂", "🤣", "😊", "😍", "🥰", "🥳", "😎", 
+  "👍", "👎", "🔥", "❤️", "💯", "🎉", "🚀", "💩", 
+  "👏", "🙏", "🙈", "🤡", "🥑", "🍺", "✨", "🌟", 
+  "💡", "💪", "🤝", "👀", "💬", "⚡", "😴", "🤩"
+];
+
+// HTML 实体转义
+function escapeHTML(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// 富文本与截图安全清洗 (允许安全 HTML 标签与 base64/HTTP 图片，清洗 script/onerror 等)
+function sanitizeRichText(html) {
+  if (!html) return "";
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const allowedTags = new Set([
+      "B", "I", "U", "S", "STRONG", "EM", "BR", "DIV", "P",
+      "SPAN", "FONT", "IMG", "A", "BLOCKQUOTE", "UL", "OL", "LI"
+    ]);
+
+    function cleanNode(node) {
+      let child = node.firstChild;
+      while (child) {
+        let next = child.nextSibling;
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const tagName = child.tagName.toUpperCase();
+          if (!allowedTags.has(tagName)) {
+            if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON"].includes(tagName)) {
+              node.removeChild(child);
+            } else {
+              const textNode = document.createTextNode(child.textContent);
+              node.replaceChild(textNode, child);
+            }
+          } else {
+            // 清理危险属性 (on*, javascript:)
+            const attrs = Array.from(child.attributes);
+            for (let attr of attrs) {
+              const name = attr.name.toLowerCase();
+              const val = attr.value;
+              if (name.startsWith("on") || val.replace(/\s+/g, "").toLowerCase().startsWith("javascript:")) {
+                child.removeAttribute(name);
+              } else if (tagName === "IMG" && !["src", "alt", "style", "class", "width", "height"].includes(name)) {
+                child.removeAttribute(name);
+              }
+            }
+            if (tagName === "A") {
+              child.setAttribute("target", "_blank");
+              child.setAttribute("rel", "noopener noreferrer");
+            }
+            cleanNode(child);
+          }
+        }
+        child = next;
+      }
+    }
+
+    cleanNode(doc.body);
+    return doc.body.innerHTML;
+  } catch (e) {
+    return escapeHTML(html);
+  }
+}
 
 window.onload = () => {
   socket = io();
 
-  console.log("socket实例", socket);
-
   contentDom = $("#content")[0];
-  sendMsgInput = $("#sendMsg")[0];
   sendMsgDiv = $("#sendMsgDiv")[0];
   listDom = $("#list")[0];
   filesDom = $("#files")[0];
+  userDom = $("#user")[0];
 
-  //连接成功
-  socket.on("connected", (data) => {
-    console.log("连接成功", data);
-    localID = data._id;
-    userDom = $("#user")[0];
-    userDom.innerHTML = `ID：${data._id}`;
-    //* 渲染historyList历史数据
-    data.historyList.forEach((v) => {
-      insertMsg(v.msg, v.type);
+  // 监听粘贴剪贴板截图图片
+  if (sendMsgDiv) {
+    sendMsgDiv.addEventListener("paste", (e) => {
+      const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+      if (!items) return;
+
+      for (let item of items) {
+        if (item.type.indexOf("image") === 0) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = document.createElement("img");
+            img.src = event.target.result;
+            img.style.maxWidth = "100%";
+            img.style.maxHeight = "200px";
+            img.style.borderRadius = "6px";
+            img.style.margin = "4px 0";
+
+            // 插入光标所在位置
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0) {
+              const range = sel.getRangeAt(0);
+              range.insertNode(img);
+              range.collapse(false);
+            } else {
+              sendMsgDiv.appendChild(img);
+            }
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
     });
+  }
+
+  // Socket 连接成功
+  socket.on("connected", (data) => {
+    console.log("Socket 连接成功:", data);
+    localID = data._id;
+    if (userDom) {
+      userDom.innerText = `ID: ${data._id.substring(0, 8)}...`;
+      userDom.title = `完整 ID: ${data._id}`;
+    }
+
+    // 渲染历史数据
+    if (Array.isArray(data.historyList)) {
+      data.historyList.forEach((v) => {
+        insertMsg(v.msg, v.type || 0, v._id || v.sender, v.time);
+      });
+    }
     initRooms(data.rooms);
-    showAlert(`你的ID是：<strong>${data._id}</strong>`, "info");
+    showAlert(`成功连接服务器！您的临时 ID 为 <strong>${escapeHTML(data._id)}</strong>`, "info");
   });
 
-  //新用户加入
+  // 新用户上线广播
   socket.on("rooms", (data) => {
-    console.log("新用户加入", data);
     initRooms(data.rooms);
-    showAlert(`ID：<strong>${data._id}</strong> 上线`);
+    showAlert(`成员 <strong>${escapeHTML(data._id.substring(0, 8))}...</strong> 已上线`, "info");
   });
 
-  //有用户离开
+  // 用户下线广播
   socket.on("disconneted", (data) => {
-    console.log("有用户离开", data);
     initRooms(data.rooms);
-    showAlert(`ID：<strong>${data._id}</strong> 下线`, "warning");
+    showAlert(`成员 <strong>${escapeHTML(data._id.substring(0, 8))}...</strong> 已离开`, "warning");
   });
 
-  //接收消息
+  // 接收文本/富文本/图片消息
   socket.on("message", (data) => {
-    console.log("服务端消息", data);
-    insertMsg(data.msg);
+    insertMsg(data.msg, 0, data._id, data.time);
   });
 
-  //接收图片base64
+  // 接收独立图片消息
   socket.on("image", (data) => {
-    console.log("接收文件", data);
-    insertMsg(data.file, 1);
+    insertMsg(data.file, 1, data._id, data.time);
   });
 
-  //接收资源列表
+  // 接收文件列表
   socket.on("file-list-paths", (data) => {
-    initFilePaths(data.fileList);
+    initFilePaths(data.fileList || []);
   });
 
-  //选择图片
+  // 历史记录被清空
+  socket.on("historyCleared", (data) => {
+    contentDom.innerHTML = `
+      <div class="chat-welcome">
+        <i class="fa-solid fa-shield-cat"></i>
+        <p>聊天记录已由成员 ${escapeHTML(data._id.substring(0, 8))}... 清空。</p>
+      </div>
+    `;
+    showAlert("云端聊天记录已清空", "warning");
+  });
+
+  // 选择图片按钮
   $("#sendImage").change(function (event) {
-    console.log(this.files);
-    if (this.files.length !== 0) {
+    if (this.files && this.files.length > 0) {
       var file = this.files[0];
-      //判断文件是否为图片
       if (!/image\/\w+/.test(file.type)) {
-        alert("文件必须为图片！");
+        showAlert("请选择图片格式文件！", "danger");
         return;
-      } else if (file.size > 2097152) {
-        alert("上传图片请小于2M");
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        showAlert("发送图片请小于 5MB", "warning");
         return;
       }
 
-      reader = new FileReader();
-      if (!reader) {
-        alert("文件读取失败");
-        return;
-      }
+      var reader = new FileReader();
       reader.onload = function (e) {
-        //资源加载完 发送base64资源
-        console.log("资源文件", e);
-        let data = {
-          file: e.target.result,
-        };
-        socket.emit("image", data);
-        insertMsg(data.file, 1);
-        event.target.value = ""; //清空资源,这样可以进行下次上传，注意event是onchange给的回调
+        let base64Img = e.target.result;
+        let nowTime = getNowTime();
+        socket.emit("image", { file: base64Img });
+        insertMsg(base64Img, 1, localID, nowTime);
+        event.target.value = "";
       };
       reader.readAsDataURL(file);
     }
   });
 
-  //发送附件
+  // 发送附件
   $("#sendFile").change(function (event) {
-    console.log(this.files);
-    if (this.files.length !== 0) {
+    if (this.files && this.files.length > 0) {
       var file = this.files[0];
       var fd = new FormData();
       fd.append("file", file);
-      //! 注意不用加header 否则会报错
+
+      showAlert(`正在上传文件: ${escapeHTML(file.name)}...`, "info");
       fetch("/file", {
-        method: "post",
+        method: "POST",
         body: fd,
       })
         .then((res) => res.json())
         .then((res) => {
-          console.log("文件上传成功，文件信息：", res);
-          socket.emit("file-upload-change", res.file);
+          if (res.file) {
+            showAlert("文件上传成功！", "success");
+            socket.emit("file-upload-change", res.file);
+          } else {
+            showAlert(res.msg || "文件上传失败", "danger");
+          }
+          event.target.value = "";
+        })
+        .catch((err) => {
+          console.error(err);
+          showAlert("上传出错，请稍后重试", "danger");
+          event.target.value = "";
         });
     }
   });
+
+  // 初始化表情包与手势
+  initEmojiPicker();
+  initGestureEngine();
+  initMobileViewport();
 };
 
-//回车发送消息
-function enterSend(event) {
-  if (event.keyCode === 13) {
-    send();
-  }
-}
-
-//发送消息 这里改成div节点所以监听innerHTML
+// 发送消息 (提取包含图片和格式的 innerHTML)
 function send() {
-  // let sendMsg = sendMsgInput.value
-  let sendMsg = sendMsgDiv.innerHTML;
-  // console.log(sendMsgDiv.innerHTML);
-  if (sendMsg === "") {
+  if (!sendMsgDiv) return;
+  
+  let htmlContent = sendMsgDiv.innerHTML;
+  let textContent = sendMsgDiv.innerText || sendMsgDiv.textContent;
+
+  // 既无文字内容也无图片标签时不发送
+  if (!textContent.trim() && !/<img\s/i.test(htmlContent)) {
     return;
   }
-  // sendMsgInput.value = ""
+  
   sendMsgDiv.innerHTML = "";
-  socket.emit("message", sendMsg);
+  socket.emit("message", htmlContent);
 }
 
-//插入消息队列 0文字消息，1图片文件
-function insertMsg(msg, type = 0) {
-  let line = document.createElement("div");
-  line.className = "line";
+// 插入消息到聊天记录面板 (0: 文本/富文本/粘贴图片, 1: 单独上传图片)
+function insertMsg(msg, type = 0, senderId = null, timeStr = null) {
+  if (!contentDom) return;
+
+  let isSelf = senderId === localID;
+  let time = timeStr || getNowTime();
+
+  let msgRow = document.createElement("div");
+  msgRow.className = `msg-row ${isSelf ? "self" : "other"}`;
+
+  let metaDiv = document.createElement("div");
+  metaDiv.className = "msg-meta";
+  let senderName = senderId
+    ? isSelf
+      ? "我"
+      : `用户 (${senderId.substring(0, 6)})`
+    : "系统";
+  metaDiv.innerText = `${senderName} • ${time}`;
+
+  let bubbleDiv = document.createElement("div");
+  bubbleDiv.className = "msg-bubble";
 
   if (type === 0) {
-    line.innerHTML += msg;
+    // 富文本与图片消息：清洗安全后再插入 DOM
+    let cleanHtml = sanitizeRichText(msg);
+    bubbleDiv.innerHTML = cleanHtml;
+    // 绑定点击放大全屏查看
+    bubbleDiv.querySelectorAll("img").forEach((img) => {
+      img.onclick = () => openImageModal(img.src);
+    });
   } else if (type === 1) {
+    // 图片消息
     let imgDom = document.createElement("img");
     imgDom.src = msg;
-    line.appendChild(imgDom);
+    imgDom.alt = "发送的图片";
+    imgDom.onclick = () => openImageModal(msg);
+    bubbleDiv.appendChild(imgDom);
   }
-  contentDom.appendChild(line);
-  contentDom.scrollTop = contentDom.scrollHeight; //滚动条到最底部
+
+  msgRow.appendChild(metaDiv);
+  msgRow.appendChild(bubbleDiv);
+  contentDom.appendChild(msgRow);
+
+  // 滚动条自动底端对齐
+  contentDom.scrollTop = contentDom.scrollHeight;
 }
 
-// 初始化在线人
-function initRooms(rooms) {
-  console.log("在线人", rooms);
-  listDom.innerHTML = "";
-  let lines = document.createElement("div");
-  lines.id = "lines";
-  rooms.forEach((v) => {
-    let line = document.createElement("div");
-    line.className = "line";
-    line.innerHTML = v;
-    lines.appendChild(line);
+// 打开全屏大图预览 Lightbox
+function openImageModal(src) {
+  const modal = document.getElementById("image-modal");
+  const modalImg = document.getElementById("modal-img-content");
+  if (modal && modalImg) {
+    modalImg.src = src;
+    modal.classList.remove("hidden");
+  }
+}
+
+// 关闭全屏大图预览 Modal
+function closeImageModal() {
+  const modal = document.getElementById("image-modal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+// 初始化表情包面板
+function initEmojiPicker() {
+  const picker = document.getElementById("emoji-picker");
+  if (!picker) return;
+
+  picker.innerHTML = "";
+  EMOJI_LIST.forEach((emoji) => {
+    let item = document.createElement("span");
+    item.className = "emoji-item";
+    item.innerText = emoji;
+    item.onclick = (e) => {
+      e.stopPropagation();
+      insertEmoji(emoji);
+    };
+    picker.appendChild(item);
   });
-  listDom.appendChild(lines);
 }
 
-// 删除资源
+// 切换表情包面板
+function toggleEmojiPicker() {
+  const picker = document.getElementById("emoji-picker");
+  if (picker) {
+    picker.classList.toggle("hidden");
+  }
+}
+
+// 插入表情到输入框
+function insertEmoji(emoji) {
+  if (!sendMsgDiv) return;
+  sendMsgDiv.focus();
+
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const range = sel.getRangeAt(0);
+    const textNode = document.createTextNode(emoji);
+    range.insertNode(textNode);
+    range.collapse(false);
+  } else {
+    sendMsgDiv.innerHTML += emoji;
+  }
+}
+
+// 初始化在线用户列表
+function initRooms(rooms) {
+  if (!listDom || !Array.isArray(rooms)) return;
+
+  const count = rooms.length;
+  $("#online-count").text(count);
+  $("#header-online-count").text(count);
+  listDom.innerHTML = "";
+
+  rooms.forEach((id) => {
+    let isMe = id === localID;
+    let item = document.createElement("div");
+    item.className = `user-item ${isMe ? "is-me" : ""}`;
+    
+    let avatar = document.createElement("div");
+    avatar.className = "user-avatar";
+    avatar.innerText = id.substring(0, 2).toUpperCase();
+
+    let nameSpan = document.createElement("span");
+    nameSpan.innerText = isMe ? `${id.substring(0, 8)}... (我)` : `${id.substring(0, 12)}...`;
+
+    item.appendChild(avatar);
+    item.appendChild(nameSpan);
+    listDom.appendChild(item);
+  });
+}
+
+// 初始化共享文件仓库
+function initFilePaths(files) {
+  if (!filesDom || !Array.isArray(files)) return;
+
+  $("#file-count").text(files.length);
+  filesDom.innerHTML = "";
+
+  if (files.length === 0) {
+    filesDom.innerHTML = `<div style="color:var(--text-dim);font-size:0.8rem;text-align:center;padding:10px;">暂无文件</div>`;
+    return;
+  }
+
+  files.forEach((v) => {
+    let item = document.createElement("div");
+    item.className = "file-item";
+
+    let info = document.createElement("div");
+    info.className = "file-info";
+
+    let a = document.createElement("a");
+    a.className = "file-name";
+    a.href = v.path;
+    a.download = v.name;
+    a.title = v.name;
+    a.innerText = v.name;
+
+    let date = document.createElement("span");
+    date.className = "file-date";
+    date.innerText = v.date;
+
+    info.appendChild(a);
+    info.appendChild(date);
+
+    let delBtn = document.createElement("i");
+    delBtn.className = "fa-solid fa-trash-can file-del-btn";
+    delBtn.title = "删除此文件";
+    delBtn.onclick = () => delFile(v.originalname);
+
+    item.appendChild(info);
+    item.appendChild(delBtn);
+    filesDom.appendChild(item);
+  });
+}
+
+// 删除附件请求
 function delFile(fileName) {
-  console.log(fileName);
-  fetch(`/file?fileName=${fileName}`, {
-    method: "delete",
+  if (!confirm(`确定要删除文件 "${fileName}" 吗？`)) return;
+
+  fetch(`/file?fileName=${encodeURIComponent(fileName)}`, {
+    method: "DELETE",
   })
     .then((res) => res.json())
     .then((res) => {
       if (res.status === 200) {
-        console.log("文件删除成功");
-        showAlert("文件删除成功");
-        // 发送删除成功socket 广播所有人
+        showAlert("文件删除成功", "success");
         socket.emit("file-upload-change", res.file);
-      } else if (res.status === 500) {
-        // 文件删除失败 不做任何处理
-        console.log("文件删除失败");
-        showAlert("文件删除失败", "danger");
+      } else {
+        showAlert(res.msg || "删除失败", "danger");
       }
+    })
+    .catch((err) => {
+      console.error(err);
+      showAlert("删除请求异常", "danger");
     });
 }
 
-// 初始化文件列表
-function initFilePaths(files) {
-  console.log("资源", files);
-  filesDom.innerHTML = "";
-  let lines = document.createElement("div");
-  lines.id = "lines";
-  files.forEach((v) => {
-    let line = document.createElement("div");
-    line.className = "line";
-    line.innerHTML = `
-    ${v.date}
-    <br>
-    <a href="${v.path}" download="${v.name}">${v.name}</a>
-    <b style="float: right;cursor: pointer;" onclick="delFile('${v.originalname}')">x</b>
-    `;
-    lines.appendChild(line);
-  });
-  filesDom.appendChild(lines);
+// 清空云端历史
+function clearHistory() {
+  if (confirm("确定要清空所有在线用户的云端聊天历史记录吗？")) {
+    socket.emit("clearHistory");
+  }
 }
 
-//弹窗
-function showAlert(msg = "弹窗消息", type = "success") {
-  let alertDom = document.createElement("div");
-  alertDom.className = [`alert alert-${type}`];
-  alertDom.setAttribute("role", "alert");
-  alertDom.innerHTML = `
-  ${msg}
-  <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-    <span aria-hidden="true">&times;</span>
-  </button>
-  `;
-  $("#alert-container")[0].appendChild(alertDom);
+// 切换 WebRTC 通话抽屉
+function toggleRtcPanel() {
+  const drawer = document.getElementById("rtc-drawer");
+  if (drawer) {
+    drawer.classList.toggle("hidden");
+    drawer.style.transform = "";
+  }
+}
 
-  //使用jq获取dom本身可以得到proto继承属性
-  alertDom = $(alertDom);
+// 切换移动端侧边栏 Drawer
+function toggleMobileSidebar() {
+  const sidebar = document.querySelector(".app-sidebar");
+  const overlay = document.getElementById("sidebar-overlay");
+  if (sidebar) {
+    sidebar.classList.toggle("mobile-active");
+    sidebar.style.transform = "";
+  }
+  if (overlay) {
+    overlay.classList.toggle("mobile-active");
+  }
+}
+
+// 平滑滚动回聊天底端
+function scrollToBottom() {
+  if (contentDom) {
+    contentDom.scrollTo({ top: contentDom.scrollHeight, behavior: "smooth" });
+  }
+}
+
+// 动态滚动监听 (向上翻阅历史消息时浮现回底按钮)
+function initGestureEngine() {
+  if (contentDom) {
+    const scrollBtn = document.getElementById("scroll-bottom-btn");
+    contentDom.addEventListener("scroll", () => {
+      const distanceToBottom = contentDom.scrollHeight - contentDom.scrollTop - contentDom.clientHeight;
+      if (scrollBtn) {
+        if (distanceToBottom > 120) {
+          scrollBtn.classList.remove("hidden");
+        } else {
+          scrollBtn.classList.add("hidden");
+        }
+      }
+    });
+  }
+}
+
+// Toast 消息提醒
+function showAlert(msg = "", type = "info") {
+  let container = document.getElementById("alert-container");
+  if (!container) return;
+
+  let toast = document.createElement("div");
+  toast.className = `alert-toast toast-${type}`;
+  
+  let iconMap = {
+    info: "fa-circle-info",
+    success: "fa-circle-check",
+    warning: "fa-triangle-exclamation",
+    danger: "fa-circle-xmark"
+  };
+
+  toast.innerHTML = `
+    <i class="fa-solid ${iconMap[type] || "fa-circle-info"}"></i>
+    <div>${msg}</div>
+  `;
+
+  container.appendChild(toast);
 
   setTimeout(() => {
-    alertDom.addClass("fade");
-    alertDom.alert("close");
-  }, 3000);
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(40px)";
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3500);
 }
 
-//清空信息
-function clearHistory() {
-  contentDom.innerHTML = "";
-  socket.emit("clearHistory");
+function getNowTime() {
+  let now = new Date();
+  let h = String(now.getHours()).padStart(2, "0");
+  let m = String(now.getMinutes()).padStart(2, "0");
+  let s = String(now.getSeconds()).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+// 动态适配移动端浏览器真实视口高度 (解决 100vh 被地址栏遮挡导致输入框推到屏幕下方的问题)
+function initMobileViewport() {
+  function updateVh() {
+    let vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
+    document.documentElement.style.setProperty("--vh", `${vh}px`);
+  }
+  updateVh();
+  window.addEventListener("resize", updateVh);
+  window.addEventListener("orientationchange", updateVh);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateVh);
+  }
 }
