@@ -5,6 +5,8 @@ var filesDom = null;
 var userDom = null;
 var socket = null;
 var localID = null;
+var activeGroupRoomsMap = new Map();
+var isReplayingHistory = false;
 
 // 常用表情包列表
 const EMOJI_LIST = [
@@ -123,6 +125,62 @@ window.onload = () => {
     });
   }
 
+  // 活跃群视频聊天室状态字典: roomId -> { roomId, roomName, memberCount }
+  activeGroupRoomsMap = new Map();
+  isReplayingHistory = false;
+
+  function markCardAsClosed(card) {
+    if (!card) return;
+    card.classList.add("is-closed");
+    const subEl = card.querySelector(".group-call-card-sub");
+    if (subEl) {
+      subEl.innerHTML = `<span class="room-closed-text"><i class="fa-solid fa-circle-xmark"></i> 聊天室已解散 (所有成员已离开)</span>`;
+    }
+    const titleEl = card.querySelector(".group-call-card-title");
+    if (titleEl && !titleEl.querySelector(".badge-room-closed")) {
+      const badge = document.createElement("span");
+      badge.className = "badge-room-closed";
+      badge.innerText = "已解散";
+      titleEl.appendChild(badge);
+    }
+    const btn = card.querySelector(".btn-join-group-card");
+    if (btn) {
+      btn.classList.add("is-closed");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-ban"></i> 已解散`;
+      btn.onclick = null;
+    }
+  }
+
+  function markCardAsActive(card, roomId, info) {
+    if (!card) return;
+    card.classList.remove("is-closed");
+    const badge = card.querySelector(".badge-room-closed");
+    if (badge) badge.remove();
+    const subEl = card.querySelector(".group-call-card-sub");
+    if (subEl) {
+      const count = (info && typeof info.memberCount === "number") ? info.memberCount : 1;
+      const creator = (info && info.creatorName) ? info.creatorName : "群友";
+      subEl.innerText = `发起人: ${creator} • 进行中 · 当前 ${count} 人在线`;
+    }
+    const btn = card.querySelector(".btn-join-group-card");
+    if (btn) {
+      btn.classList.remove("is-closed");
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-arrow-right-to-bracket"></i> 点击进入`;
+      const roomName = (info && info.roomName) || card.getAttribute("data-room-name") || "群视频房间";
+      btn.onclick = function () {
+        if (window.joinGroupRoom) {
+          window.joinGroupRoom(roomId, roomName);
+        }
+      };
+    }
+  }
+
+  window.markCardAsClosedById = function (roomId) {
+    document.querySelectorAll(`.group-call-card[data-room-id="${roomId}"]`).forEach(markCardAsClosed);
+  };
+
   // Socket 连接成功
   socket.on("connected", (data) => {
     console.log("Socket 连接成功:", data);
@@ -132,14 +190,55 @@ window.onload = () => {
       userDom.title = `完整 ID: ${data._id}`;
     }
 
+    // 记录活跃房间
+    activeGroupRoomsMap.clear();
+    if (Array.isArray(data.activeRooms)) {
+      data.activeRooms.forEach((r) => {
+        if (typeof r === "string") {
+          activeGroupRoomsMap.set(r, { roomId: r, memberCount: 1 });
+        } else if (r && r.roomId) {
+          activeGroupRoomsMap.set(r.roomId, r);
+        }
+      });
+    }
+
     // 渲染历史数据
+    isReplayingHistory = true;
     if (Array.isArray(data.historyList)) {
       data.historyList.forEach((v) => {
         insertMsg(v.msg, v.type || 0, v._id || v.sender, v.time);
       });
     }
+    isReplayingHistory = false;
+
     initRooms(data.rooms);
     showAlert(`成功连接服务器！您的临时 ID 为 <strong>${escapeHTML(data._id)}</strong>`, "info");
+  });
+
+  // 活跃群视频房间列表更新
+  socket.on("active-group-rooms", (list) => {
+    activeGroupRoomsMap.clear();
+    if (Array.isArray(list)) {
+      list.forEach((r) => activeGroupRoomsMap.set(r.roomId, r));
+    }
+    // 遍历公屏群视频卡片，根据最新存活状态同步 UI
+    document.querySelectorAll(".group-call-card").forEach((card) => {
+      const rId = card.getAttribute("data-room-id");
+      if (!rId) return;
+      if (!activeGroupRoomsMap.has(rId)) {
+        markCardAsClosed(card);
+      } else {
+        const info = activeGroupRoomsMap.get(rId);
+        markCardAsActive(card, rId, info);
+      }
+    });
+  });
+
+  // 某群视频房间成员全空，服务器自动解散广播
+  socket.on("group-room-closed", (data) => {
+    if (!data || !data.roomId) return;
+    activeGroupRoomsMap.delete(data.roomId);
+    window.markCardAsClosedById(data.roomId);
   });
 
   // 新用户上线广播
@@ -154,9 +253,9 @@ window.onload = () => {
     showAlert(`成员 <strong>${escapeHTML(data._id.substring(0, 8))}...</strong> 已离开`, "warning");
   });
 
-  // 接收文本/富文本/图片消息
+  // 接收文本/富文本/图片/群视频邀请卡片消息
   socket.on("message", (data) => {
-    insertMsg(data.msg, 0, data._id, data.time);
+    insertMsg(data.msg, data.type !== undefined ? data.type : 0, data._id, data.time);
   });
 
   // 接收独立图片消息
@@ -254,6 +353,7 @@ function send() {
   }
   
   sendMsgDiv.innerHTML = "";
+  toggleEmojiPicker(false);
   socket.emit("message", htmlContent);
 }
 
@@ -294,6 +394,54 @@ function insertMsg(msg, type = 0, senderId = null, timeStr = null) {
     imgDom.alt = "发送的图片";
     imgDom.onclick = () => openImageModal(msg);
     bubbleDiv.appendChild(imgDom);
+  } else if (type === 2) {
+    // 群视频邀请卡片
+    let cardData = null;
+    try {
+      cardData = typeof msg === "string" ? JSON.parse(msg) : msg;
+    } catch (e) {
+      cardData = { roomName: "群聊视频会议", roomId: "default" };
+    }
+    const roomId = cardData.roomId || "default";
+    const roomName = cardData.roomName || "群视频房间";
+
+    // 若非历史回放且为活跃卡片，注册到活跃房间映射
+    if (!isReplayingHistory && cardData.status === "active" && !activeGroupRoomsMap.has(roomId)) {
+      activeGroupRoomsMap.set(roomId, {
+        roomId: roomId,
+        roomName: roomName,
+        creatorName: cardData.creatorName || "群友",
+        memberCount: 1
+      });
+    }
+
+    // 判断当前是否已解散：卡片显式 closed，或活跃列表中不存在此 room
+    const isClosed = cardData.status === "closed" || !activeGroupRoomsMap.has(roomId);
+
+    let cardEl = document.createElement("div");
+    cardEl.className = `group-call-card ${isClosed ? "is-closed" : ""}`;
+    cardEl.setAttribute("data-room-id", roomId);
+    cardEl.setAttribute("data-room-name", roomName);
+
+    const roomInfo = activeGroupRoomsMap.get(roomId);
+    const memberCount = roomInfo && typeof roomInfo.memberCount === "number" ? roomInfo.memberCount : 1;
+    let subHtml = isClosed
+      ? `<span class="room-closed-text"><i class="fa-solid fa-circle-xmark"></i> 聊天室已解散 (所有成员已离开)</span>`
+      : `发起人: ${escapeHTML(cardData.creatorName || "群友")} • 进行中 · 当前 ${memberCount} 人在线`;
+
+    let btnHtml = isClosed
+      ? `<button type="button" class="btn-join-group-card is-closed" disabled><i class="fa-solid fa-ban"></i> 已解散</button>`
+      : `<button type="button" class="btn-join-group-card" onclick="window.joinGroupRoom && window.joinGroupRoom('${escapeHTML(roomId)}', '${escapeHTML(roomName)}')"><i class="fa-solid fa-arrow-right-to-bracket"></i> 点击进入</button>`;
+
+    cardEl.innerHTML = `
+      <div class="group-call-card-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
+      <div class="group-call-card-info">
+        <div class="group-call-card-title">${escapeHTML(roomName)}${isClosed ? '<span class="badge-room-closed">已解散</span>' : ''}</div>
+        <div class="group-call-card-sub">${subHtml}</div>
+      </div>
+      ${btnHtml}
+    `;
+    bubbleDiv.appendChild(cardEl);
   }
 
   msgRow.appendChild(metaDiv);
@@ -480,29 +628,362 @@ function closeImageModal() {
   });
 })();
 
-// 初始化表情包面板
+// 丰富多分类 Emoji 数据源（紧凑、无 search、零外部依赖）
+const EMOJI_CATEGORIES = [
+  {
+    id: "recent",
+    name: "常用",
+    icon: "fa-regular fa-clock",
+    emojis: ["😀", "😂", "🤣", "😊", "😍", "🥰", "😎", "👍", "👎", "🔥", "❤️", "💯", "🎉", "✨", "👏", "🙏", "💪", "🤔", "👀", "🚀", "💩", "👌", "✌️", "🤝"]
+  },
+  {
+    id: "smileys",
+    name: "表情",
+    icon: "fa-regular fa-face-smile",
+    emojis: [
+      "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+      "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+      "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩",
+      "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "😣", "😖",
+      "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯",
+      "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔",
+      "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦",
+      "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴",
+      "🤢", "🤮", "🤧", "😷", "🤒", "🤕"
+    ]
+  },
+  {
+    id: "gestures",
+    name: "手势",
+    icon: "fa-regular fa-hand",
+    emojis: [
+      "👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉",
+      "👆", "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "💪", "✍️",
+      "🙏", "👏", "🙌", "👐", "🤲", "🤝", "👀", "👁️", "👅", "👄",
+      "🧠", "🫀", "🫁"
+    ]
+  },
+  {
+    id: "animals",
+    name: "动物",
+    icon: "fa-solid fa-paw",
+    emojis: [
+      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯",
+      "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", "🐧", "🐦", "🐤", "🦆",
+      "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🐛", "🦋",
+      "🐌", "🐞", "🐜", "🦟", "🐢", "🐍", "🐙", "🦑", "🦐", "🦞",
+      "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🐊", "🐅",
+      "🐆", "🦓", "🦍", "🦧", "🐘", "🦛", "🦏", "🐪", "🦒", "🦘"
+    ]
+  },
+  {
+    id: "food",
+    name: "美食",
+    icon: "fa-solid fa-utensils",
+    emojis: [
+      "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐",
+      "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🥑", "🥦",
+      "🥬", "🥒", "🌶️", "🫑", "🌽", "🥕", "🧄", "🧅", "🥔", "🍠",
+      "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞",
+      "🧇", "🥓", "🥩", "🍗", "🍖", "🌭", "🍔", "🍟", "🍕", "🥪",
+      "🌮", "🌯", "🫔", "🥙", "🧆", "🍜", "🍝", "🍣", "🍱", "🥟",
+      "🍧", "🍨", "🍦", "🥧", "🍰", "🎂", "🧁", "🍮", "🍭", "🍬",
+      "🍫", "🍿", "🍩", "🍪", "☕", "🍵", "🧃", "🥤", "🧋", "🍺",
+      "🍻", "🥂", "🍷", "🍾"
+    ]
+  },
+  {
+    id: "sports",
+    name: "运动",
+    icon: "fa-solid fa-futbol",
+    emojis: [
+      "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🎱", "🏓", "🏸",
+      "🥅", "🥊", "🥋", "🎯", "🪀", "🪁", "⛳", "🛹", "🛼", "🛷",
+      "⛸️", "🎿", "🏄", "🏊", "🚴", "🏋️", "🧗", "🤸", "🎮", "🕹️",
+      "🎲", "🧩", "♟️", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹",
+      "🥁", "🎷", "🎺", "🎸", "🪕", "🎻"
+    ]
+  },
+  {
+    id: "objects",
+    name: "物品",
+    icon: "fa-solid fa-lightbulb",
+    emojis: [
+      "⌚", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "📷", "📸",
+      "📹", "📼", "🔍", "🔎", "💡", "🔦", "🏮", "📔", "📕", "📖",
+      "📗", "📘", "📙", "📚", "📓", "📒", "📃", "📜", "📄", "📰",
+      "💳", "💎", "💰", "💵", "💸", "✉️", "📧", "📦", "📫", "✏️",
+      "✒️", "🖋️", "📌", "📍", "📎", "🔒", "🔓", "🔑", "🗝️", "🔨",
+      "🪓", "🔧", "🪛", "🔩", "⚙️", "🧰", "🧲", "🪜", "🧪", "🔬",
+      "🔭", "📡", "💉", "💊", "🩹", "🩺", "🚪", "🪞", "🪟", "🛏️",
+      "🛋️", "🚿", "🛁", "🧴", "🧹", "🧺", "🧻", "🧼", "🧽", "🪣",
+      "🛎️", "🎁", "🎈", "🎉", "🎊"
+    ]
+  },
+  {
+    id: "symbols",
+    name: "符号",
+    icon: "fa-regular fa-heart",
+    emojis: [
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔",
+      "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "☮️",
+      "✝️", "☪️", "🕉️", "☸️", "✡️", "🔯", "🕎", "☯️", "☦️", "🛐",
+      "⛎", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐",
+      "♑", "♒", "♓", "🆔", "⚛️", "🉑", "☢️", "☣️", "📴", "📳",
+      "🈶", "🈚", "🈸", "🈺", "🈷️", "✴️", "🆚", "💮", "🉐", "㊙️",
+      "㊗️", "🈴", "🈵", "🈲", "🅰️", "🅱️", "🆎", "🆑", "🅾️", "🆘",
+      "❌", "⭕", "🛑", "⛔", "📛", "🚫", "💯", "💢", "♨️", "❗",
+      "❕", "❓", "❔", "‼️", "⁉️", "💤", "💬", "💭", "🗯️", "♠️",
+      "♣️", "♥️", "♦️", "🃏", "🎴", "🀄", "⭐", "🌟", "✨", "⚡",
+      "☄️", "💥", "🔥", "🌈", "☀️", "🌤️", "⛅", "🌧️", "🌩️", "❄️", "☃️"
+    ]
+  }
+];
+
+// 初始化轻量多分类表情面板（零外部依赖、极致紧凑、无 search 栏）
 function initEmojiPicker() {
   const picker = document.getElementById("emoji-picker");
   if (!picker) return;
 
-  picker.innerHTML = "";
-  EMOJI_LIST.forEach((emoji) => {
-    let item = document.createElement("span");
-    item.className = "emoji-item";
-    item.innerText = emoji;
-    item.onclick = (e) => {
-      e.stopPropagation();
-      insertEmoji(emoji);
-    };
-    picker.appendChild(item);
+  if (picker.dataset.initialized) return;
+  picker.dataset.initialized = "true";
+
+  let activeTabId = "recent";
+
+  const renderMultiCategoryPicker = () => {
+    picker.innerHTML = `
+      <div class="emoji-picker-drag-handle" title="按住向下滑动收起"></div>
+      <div class="emoji-tabs-bar" id="emoji-tabs-bar"></div>
+      <div class="emoji-grid" id="emoji-grid"></div>
+    `;
+
+    renderCategoryTabs();
+    renderEmojiGrid(activeTabId);
+  };
+
+  const renderCategoryTabs = () => {
+    const tabsBar = document.getElementById("emoji-tabs-bar");
+    if (!tabsBar) return;
+    tabsBar.innerHTML = "";
+
+    EMOJI_CATEGORIES.forEach((cat) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `emoji-tab-btn ${cat.id === activeTabId ? "active" : ""}`;
+      btn.innerHTML = `<i class="${cat.icon}"></i> <span>${cat.name}</span>`;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        activeTabId = cat.id;
+        renderCategoryTabs();
+        renderEmojiGrid(cat.id);
+      };
+      tabsBar.appendChild(btn);
+    });
+  };
+
+  const renderEmojiGrid = (catId) => {
+    const grid = document.getElementById("emoji-grid");
+    if (!grid) return;
+    grid.innerHTML = "";
+
+    const cat = EMOJI_CATEGORIES.find((c) => c.id === catId) || EMOJI_CATEGORIES[0];
+    cat.emojis.forEach((emoji) => {
+      let item = document.createElement("span");
+      item.className = "emoji-item";
+      item.innerText = emoji;
+      item.onclick = (e) => {
+        e.stopPropagation();
+        insertEmoji(emoji);
+      };
+      grid.appendChild(item);
+    });
+  };
+
+  // 始终使用高响应纯前端轻量面板
+  renderMultiCategoryPicker();
+
+  // 手势引擎：在输入栏与表情区域按住向下滑动收起表情框
+  function initEmojiDragDismiss() {
+    const inputWrapper = document.querySelector(".chat-input-wrapper");
+    if (!inputWrapper || !picker) return;
+
+    let startY = 0;
+    let startX = 0;
+    let isTracking = false;
+    let isDraggingDown = false;
+    let gridScrollTop = 0;
+
+    function onStart(clientY, clientX, target) {
+      if (picker.classList.contains("hidden")) return;
+      if (!inputWrapper.contains(target) && !picker.contains(target)) return;
+
+      const grid = document.getElementById("emoji-grid");
+      if (grid && grid.contains(target)) {
+        gridScrollTop = grid.scrollTop;
+      } else {
+        gridScrollTop = 0;
+      }
+
+      startY = clientY;
+      startX = clientX;
+      isTracking = true;
+      isDraggingDown = false;
+    }
+
+    function onMove(clientY, clientX, e) {
+      if (!isTracking) return;
+      if (picker.classList.contains("hidden")) {
+        isTracking = false;
+        return;
+      }
+
+      const deltaY = clientY - startY;
+      const deltaX = clientX - startX;
+
+      // 仅当向下拖拽、垂直位移占主导且表情网格处于顶部时接管滑动
+      if (deltaY > 6 && Math.abs(deltaY) > Math.abs(deltaX) && gridScrollTop <= 0) {
+        isDraggingDown = true;
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        const moveDist = Math.max(0, deltaY * 0.7);
+        picker.style.transform = `translateY(${moveDist}px)`;
+        picker.style.opacity = `${Math.max(0.15, 1 - moveDist / 120)}`;
+        picker.style.transition = "none";
+      }
+    }
+
+    function onEnd(clientY) {
+      if (!isTracking) return;
+      isTracking = false;
+
+      if (isDraggingDown) {
+        isDraggingDown = false;
+        const totalDelta = clientY - startY;
+        if (totalDelta > 25) {
+          // 向下滑动距离足够 -> 缩回表情框
+          picker.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, max-height 0.24s ease";
+          picker.style.transform = "translateY(50px)";
+          picker.style.opacity = "0";
+          setTimeout(() => {
+            toggleEmojiPicker(false);
+            picker.style.transform = "";
+            picker.style.opacity = "";
+            picker.style.transition = "";
+          }, 200);
+        } else {
+          // 滑动距离不足 -> 回弹复位
+          picker.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease";
+          picker.style.transform = "translateY(0)";
+          picker.style.opacity = "1";
+          setTimeout(() => {
+            picker.style.transform = "";
+            picker.style.opacity = "";
+            picker.style.transition = "";
+          }, 200);
+        }
+      }
+    }
+
+    // 移动端 Touch 触摸事件
+    inputWrapper.addEventListener("touchstart", (e) => {
+      if (e.touches.length === 1) {
+        onStart(e.touches[0].clientY, e.touches[0].clientX, e.target);
+      }
+    }, { passive: false });
+
+    document.addEventListener("touchmove", (e) => {
+      if (isTracking && e.touches.length === 1) {
+        onMove(e.touches[0].clientY, e.touches[0].clientX, e);
+      }
+    }, { passive: false });
+
+    document.addEventListener("touchend", (e) => {
+      if (isTracking) {
+        const endY = e.changedTouches.length ? e.changedTouches[0].clientY : startY;
+        onEnd(endY);
+      }
+    });
+
+    document.addEventListener("touchcancel", () => {
+      if (isTracking) onEnd(startY);
+    });
+
+    // 桌面端 Pointer/Mouse 鼠标拖拽事件
+    inputWrapper.addEventListener("pointerdown", (e) => {
+      if (e.button === 0) {
+        onStart(e.clientY, e.clientX, e.target);
+      }
+    });
+
+    document.addEventListener("pointermove", (e) => {
+      if (isTracking) {
+        onMove(e.clientY, e.clientX, e);
+      }
+    });
+
+    document.addEventListener("pointerup", (e) => {
+      if (isTracking) onEnd(e.clientY);
+    });
+
+    document.addEventListener("pointercancel", () => {
+      if (isTracking) onEnd(startY);
+    });
+  }
+
+  initEmojiDragDismiss();
+
+  // 点击外部自动关闭表情包
+  document.addEventListener("click", (e) => {
+    const btn = document.getElementById("emoji-toggle-btn");
+    if (!picker || picker.classList.contains("hidden")) return;
+    if (picker.contains(e.target) || (btn && btn.contains(e.target))) {
+      return;
+    }
+    toggleEmojiPicker(false);
   });
+
+  // 消息列表滚动时自动关闭表情包
+  const content = document.getElementById("content");
+  if (content) {
+    content.addEventListener("scroll", () => {
+      if (!picker.classList.contains("hidden")) {
+        toggleEmojiPicker(false);
+      }
+    }, { passive: true });
+  }
 }
 
 // 切换表情包面板
-function toggleEmojiPicker() {
+function toggleEmojiPicker(arg) {
   const picker = document.getElementById("emoji-picker");
-  if (picker) {
-    picker.classList.toggle("hidden");
+  const btn = document.getElementById("emoji-toggle-btn");
+  if (!picker) return;
+  initEmojiPicker();
+
+  let forceState;
+  if (typeof arg === "boolean") {
+    forceState = arg;
+  } else if (arg && arg.stopPropagation) {
+    arg.stopPropagation();
+  }
+
+  const isHidden = picker.classList.contains("hidden");
+  const show = forceState !== undefined ? forceState : isHidden;
+
+  if (show) {
+    picker.classList.remove("hidden");
+    picker.style.transform = "";
+    picker.style.opacity = "";
+    picker.style.transition = "";
+    if (btn) btn.classList.add("active");
+    scrollToBottom();
+  } else {
+    picker.classList.add("hidden");
+    picker.style.transform = "";
+    picker.style.opacity = "";
+    picker.style.transition = "";
+    if (btn) btn.classList.remove("active");
   }
 }
 
@@ -514,12 +995,17 @@ function insertEmoji(emoji) {
   const sel = window.getSelection();
   if (sel && sel.rangeCount > 0) {
     const range = sel.getRangeAt(0);
-    const textNode = document.createTextNode(emoji);
-    range.insertNode(textNode);
-    range.collapse(false);
-  } else {
-    sendMsgDiv.innerHTML += emoji;
+    if (sendMsgDiv.contains(range.commonAncestorContainer)) {
+      const textNode = document.createTextNode(emoji);
+      range.insertNode(textNode);
+      range.collapse(false);
+
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
   }
+  sendMsgDiv.innerHTML += emoji;
 }
 
 // 初始化在线用户列表
@@ -529,10 +1015,13 @@ function initRooms(rooms) {
   const count = rooms.length;
   $("#online-count").text(count);
   $("#header-online-count").text(count);
+  $("#desktop-sidebar-count").text(count);
   listDom.innerHTML = "";
 
+  const myId = (typeof localID !== "undefined" && localID) || (typeof socket !== "undefined" && socket && socket.id);
+
   rooms.forEach((id) => {
-    let isMe = id === localID;
+    let isMe = (id === myId) || (typeof localID !== "undefined" && id === localID);
     let item = document.createElement("div");
     item.className = `user-item ${isMe ? "is-me" : ""}`;
     
@@ -545,8 +1034,138 @@ function initRooms(rooms) {
 
     item.appendChild(avatar);
     item.appendChild(nameSpan);
+
+    // 严禁给自己呼叫：只有非本人条目才渲染拨号按钮
+    if (!isMe) {
+      let callBtn = document.createElement("button");
+      callBtn.className = "btn-call-peer";
+      callBtn.title = `一对一呼叫 ${id.substring(0, 8)}...`;
+      callBtn.innerHTML = '<i class="fa-solid fa-phone"></i>';
+      callBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (window.startDirectCall) {
+          window.startDirectCall(id);
+        } else {
+          showAlert("视讯模块正在准备中，请稍候...", "info");
+        }
+      };
+      item.appendChild(callBtn);
+    }
+
     listDom.appendChild(item);
   });
+
+  latestRooms = rooms;
+  renderLaunchpadUserList();
+}
+
+// ============ 音视频呼叫控制台 (Call Launchpad) ============
+var latestRooms = [];
+var currentLaunchpadTab = "direct";
+
+function openCallLaunchpad(defaultTab = "direct") {
+  // 如果通话已在进行中但面板被隐藏，点击视讯通话直接唤醒视讯界面
+  if (typeof window.isRtcInChannel === "function" && window.isRtcInChannel()) {
+    toggleRtcPanel(true);
+    return;
+  }
+  const modal = document.getElementById("call-launchpad-modal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  switchLaunchpadTab(defaultTab);
+  renderLaunchpadUserList();
+}
+
+function closeCallLaunchpad() {
+  const modal = document.getElementById("call-launchpad-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function switchLaunchpadTab(tab) {
+  currentLaunchpadTab = tab;
+  const directBtn = document.getElementById("tab-btn-direct");
+  const groupBtn = document.getElementById("tab-btn-group");
+  const directContent = document.getElementById("launchpad-tab-direct");
+  const groupContent = document.getElementById("launchpad-tab-group");
+
+  if (tab === "direct") {
+    if (directBtn) directBtn.classList.add("active");
+    if (groupBtn) groupBtn.classList.remove("active");
+    if (directContent) directContent.classList.remove("hidden");
+    if (groupContent) groupContent.classList.add("hidden");
+    renderLaunchpadUserList();
+  } else {
+    if (groupBtn) groupBtn.classList.add("active");
+    if (directBtn) directBtn.classList.remove("active");
+    if (groupContent) groupContent.classList.remove("hidden");
+    if (directContent) directContent.classList.add("hidden");
+  }
+}
+
+function renderLaunchpadUserList() {
+  const listContainer = document.getElementById("launchpad-user-list");
+  if (!listContainer) return;
+
+  const myId = (typeof localID !== "undefined" && localID) || (typeof socket !== "undefined" && socket && socket.id);
+  const otherUsers = (latestRooms || []).filter((id) => id !== myId && id !== localID);
+
+  if (otherUsers.length === 0) {
+    listContainer.innerHTML = '<div class="launchpad-empty-tip">暂无其他在线好友，可切换到【新建聊天室】开启房间邀请群友！</div>';
+    return;
+  }
+
+  listContainer.innerHTML = "";
+  otherUsers.forEach((id) => {
+    const card = document.createElement("div");
+    card.className = "launchpad-user-card";
+
+    const meta = document.createElement("div");
+    meta.className = "launchpad-user-meta";
+
+    const avatar = document.createElement("div");
+    avatar.className = "launchpad-user-avatar";
+    avatar.innerText = id.substring(0, 2).toUpperCase();
+
+    const name = document.createElement("span");
+    name.className = "launchpad-user-name";
+    name.innerText = `用户 ${id.substring(0, 8)}...`;
+
+    meta.appendChild(avatar);
+    meta.appendChild(name);
+
+    const callBtn = document.createElement("button");
+    callBtn.type = "button";
+    callBtn.className = "btn-launchpad-call";
+    callBtn.innerHTML = '<i class="fa-solid fa-phone"></i> 一对一呼叫';
+    callBtn.onclick = () => {
+      closeCallLaunchpad();
+      if (window.startDirectCall) {
+        window.startDirectCall(id);
+      }
+    };
+
+    card.appendChild(meta);
+    card.appendChild(callBtn);
+    listContainer.appendChild(card);
+  });
+}
+
+function selectQuickRoomTag(tagName) {
+  const input = document.getElementById("launchpad-room-input");
+  if (input) {
+    input.value = tagName;
+    input.focus();
+  }
+}
+
+function submitCreateGroupRoom() {
+  const input = document.getElementById("launchpad-room-input");
+  const roomName = (input && input.value.trim()) ? input.value.trim() : "群聊多人会议";
+  closeCallLaunchpad();
+
+  if (window.createGroupRoom) {
+    window.createGroupRoom(roomName);
+  }
 }
 
 // 初始化共享文件仓库
@@ -565,11 +1184,13 @@ function initFilePaths(files) {
     let item = document.createElement("div");
     item.className = "file-item";
 
+    let icon = document.createElement("i");
+    icon.className = "fa-solid fa-file-lines file-icon";
+
     let info = document.createElement("div");
     info.className = "file-info";
-
+    
     let a = document.createElement("a");
-    a.className = "file-name";
     a.href = v.path;
     a.download = v.name;
     a.title = v.name;
@@ -622,25 +1243,149 @@ function clearHistory() {
   }
 }
 
-// 切换 WebRTC 通话抽屉
-function toggleRtcPanel() {
-  const drawer = document.getElementById("rtc-drawer");
-  if (drawer) {
-    drawer.classList.toggle("hidden");
-    drawer.style.transform = "";
+// PC 端侧边栏折叠状态与自动缩进标记
+let isSidebarCollapsed = false;
+let autoCollapsedByVideo = false;
+
+// 切换 PC 端侧边栏折叠状态 (在线成员与共享文件仓库)
+function toggleDesktopSidebar(forceState, isAutoByVideo = false) {
+  const appMain = document.querySelector(".app-main");
+  const sidebar = document.querySelector(".app-sidebar");
+  const toggleBtn = document.getElementById("desktop-sidebar-toggle-btn");
+  const toggleText = document.getElementById("sidebar-toggle-text");
+  const toggleIcon = document.getElementById("sidebar-toggle-icon");
+  const edgeToggle = document.getElementById("sidebar-edge-toggle");
+  if (!appMain || !sidebar) return;
+
+  const currentlyCollapsed = appMain.classList.contains("sidebar-collapsed");
+  // forceState: false => 缩进去 (收起), true => 展开
+  const toCollapse = forceState !== undefined ? !forceState : !currentlyCollapsed;
+
+  if (toCollapse) {
+    // 缩进去 (折叠侧边栏)
+    appMain.classList.add("sidebar-collapsed");
+    sidebar.classList.add("collapsed");
+    isSidebarCollapsed = true;
+    if (isAutoByVideo) {
+      autoCollapsedByVideo = true;
+    } else {
+      autoCollapsedByVideo = false; // 用户主动收起，重置自动标识
+    }
+    if (toggleBtn) {
+      toggleBtn.title = "展开侧边栏 (在线成员与共享仓库)";
+      toggleBtn.classList.remove("active");
+    }
+    if (toggleText) toggleText.innerText = "展开";
+    if (toggleIcon) toggleIcon.className = "fa-solid fa-angles-left";
+    if (edgeToggle) {
+      edgeToggle.title = "展开侧边栏 (在线成员与共享仓库)";
+      edgeToggle.innerHTML = '<i class="fa-solid fa-angles-left"></i>';
+    }
+  } else {
+    // 展开出来
+    appMain.classList.remove("sidebar-collapsed");
+    sidebar.classList.remove("collapsed");
+    isSidebarCollapsed = false;
+    autoCollapsedByVideo = false; // 用户主动展开或恢复，重置自动标识
+    if (toggleBtn) {
+      toggleBtn.title = "缩进收起侧边栏 (在线成员与共享仓库)";
+      toggleBtn.classList.add("active");
+    }
+    if (toggleText) toggleText.innerText = "侧栏";
+    if (toggleIcon) toggleIcon.className = "fa-solid fa-table-columns";
+    if (edgeToggle) {
+      edgeToggle.title = "缩进/收起侧边栏";
+      edgeToggle.innerHTML = '<i class="fa-solid fa-angles-right"></i>';
+    }
   }
 }
+window.toggleDesktopSidebar = toggleDesktopSidebar;
+
+// 如果侧边栏之前是因为开启视频而默认缩进去的，退出视频时自动恢复展开
+function restoreDesktopSidebarIfAutoCollapsed() {
+  if (autoCollapsedByVideo) {
+    autoCollapsedByVideo = false;
+    toggleDesktopSidebar(true);
+  }
+}
+window.restoreDesktopSidebarIfAutoCollapsed = restoreDesktopSidebarIfAutoCollapsed;
+
+// 切换 WebRTC 通话抽屉 (移动端在顶部压下，PC端在右侧作为独立模块展开)
+function toggleRtcPanel(forceState) {
+  const drawer = document.getElementById("rtc-drawer");
+  const btn = document.getElementById("toggle-rtc-btn");
+  const appMain = document.querySelector(".app-main");
+  const chatSection = document.querySelector(".chat-section");
+  if (!drawer) return;
+
+  const isHidden = drawer.classList.contains("hidden");
+  const show = forceState !== undefined ? forceState : isHidden;
+
+  if (show) {
+    drawer.classList.remove("hidden");
+    if (btn) btn.classList.add("active");
+    if (appMain) appMain.classList.add("has-rtc");
+    if (chatSection) chatSection.classList.add("has-rtc");
+
+    // 开启视频默认把在线人员共享仓库缩进去 (PC端大屏)
+    if (window.innerWidth > 768) {
+      toggleDesktopSidebar(false, true /* isAutoByVideo */);
+    }
+
+    scrollToBottom();
+  } else {
+    drawer.classList.add("hidden");
+    if (btn) btn.classList.remove("active");
+    if (appMain) appMain.classList.remove("has-rtc");
+    if (chatSection) chatSection.classList.remove("has-rtc");
+
+    // 退出视频通话时：如果此前由开启视频默认缩进去，自动恢复展开侧边栏
+    restoreDesktopSidebarIfAutoCollapsed();
+
+    // 若未在通话中（仅开启了预览），收起面板时立即释放麦克风与摄像头硬件
+    if (typeof window.isRtcInChannel === "function" && !window.isRtcInChannel() && typeof window.releaseLocalMedia === "function") {
+      window.releaseLocalMedia();
+    }
+  }
+
+  // 同步更新后台通话常驻提示微标与横幅（杜绝“消失了找不到打开入口”）
+  updateActiveCallIndicators();
+}
+window.toggleRtcPanel = toggleRtcPanel;
+
+// 更新后台进行中通话的唤醒入口 (顶部胶囊与横幅)
+function updateActiveCallIndicators() {
+  const badge = document.getElementById("active-call-badge");
+  const banner = document.getElementById("rtc-minimized-banner");
+  const drawer = document.getElementById("rtc-drawer");
+  const inCall = typeof window.isRtcInChannel === "function" && window.isRtcInChannel();
+  const isDrawerHidden = drawer ? drawer.classList.contains("hidden") : true;
+
+  const shouldShow = inCall && isDrawerHidden;
+  if (badge) {
+    badge.classList.toggle("hidden", !shouldShow);
+  }
+  if (banner) {
+    banner.classList.toggle("hidden", !shouldShow);
+  }
+}
+window.updateActiveCallIndicators = updateActiveCallIndicators;
 
 // 切换移动端侧边栏 Drawer
-function toggleMobileSidebar() {
+function toggleMobileSidebar(forceState) {
   const sidebar = document.querySelector(".app-sidebar");
   const overlay = document.getElementById("sidebar-overlay");
-  if (sidebar) {
-    sidebar.classList.toggle("mobile-active");
-    sidebar.style.transform = "";
-  }
-  if (overlay) {
-    overlay.classList.toggle("mobile-active");
+  if (!sidebar) return;
+
+  const isHidden = !sidebar.classList.contains("mobile-active");
+  const show = forceState !== undefined ? forceState : isHidden;
+
+  if (show) {
+    sidebar.classList.add("mobile-active");
+    if (overlay) overlay.classList.add("mobile-active");
+  } else {
+    sidebar.classList.remove("mobile-active");
+    if (overlay) overlay.classList.remove("mobile-active");
   }
 }
 
@@ -651,8 +1396,9 @@ function scrollToBottom() {
   }
 }
 
-// 动态滚动监听 (向上翻阅历史消息时浮现回底按钮)
+// 全局移动端触摸手势与滚动监听引擎
 function initGestureEngine() {
+  // 聊天列表滚动监听
   if (contentDom) {
     const scrollBtn = document.getElementById("scroll-bottom-btn");
     contentDom.addEventListener("scroll", () => {
@@ -666,6 +1412,70 @@ function initGestureEngine() {
       }
     });
   }
+
+  // 移动端手势判断 (右划展开侧边栏 / 左划收起 / 视频向上划收起 / 表情向下划收起)
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let activeTouchTarget = null;
+
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+    activeTouchTarget = e.target;
+  }, { passive: true });
+
+  document.addEventListener("touchend", (e) => {
+    if (!touchStartX || !touchStartY || e.changedTouches.length !== 1) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    const deltaTime = Date.now() - touchStartTime;
+
+    if (deltaTime > 450) return;
+
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    // 1. 垂直手势
+    if (absY > absX && absY > 40) {
+      // 视频频道向上划动 -> 收起视频频道
+      const rtcDrawer = document.getElementById("rtc-drawer");
+      if (rtcDrawer && rtcDrawer.contains(activeTouchTarget) && !rtcDrawer.classList.contains("hidden")) {
+        if (deltaY < -35) {
+          toggleRtcPanel(false);
+          showAlert("已上滑收起音视频频道", "info");
+          return;
+        }
+      }
+
+      // 表情面板向下划动 -> 收起表情包
+      const emojiPicker = document.getElementById("emoji-picker");
+      const inputWrapper = document.querySelector(".chat-input-wrapper");
+      if (emojiPicker && !emojiPicker.classList.contains("hidden")) {
+        if ((emojiPicker.contains(activeTouchTarget) || (inputWrapper && inputWrapper.contains(activeTouchTarget))) && deltaY > 25) {
+          toggleEmojiPicker(false);
+          return;
+        }
+      }
+    }
+
+    // 2. 水平手势 (移动端右划展开控制台 / 左划收起)
+    if (absX > absY && absX > 55 && window.innerWidth <= 768) {
+      if (deltaX > 60) {
+        // 右划 -> 打开侧边栏
+        toggleMobileSidebar(true);
+        showAlert("已右滑展开控制台", "info");
+      } else if (deltaX < -60) {
+        // 左划 -> 收起侧边栏
+        toggleMobileSidebar(false);
+      }
+    }
+  }, { passive: true });
 }
 
 // Toast 消息提醒

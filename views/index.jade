@@ -8,51 +8,66 @@ block content
   div(id="alert-container", class="alert-container")
 
   div(class="app-layout")
-    // Header Navigation
-    header(class="app-header")
-      div(class="header-brand")
-        div(class="brand-title")
-          h1
-            i(class="fa-solid fa-comments brand-logo-icon")
-            | Socket Chat
-          span(class="brand-status")
-            span(class="status-dot")
-            | 实时传输已连接
-      
-      div(class="header-actions")
-        div(class="user-badge", id="user-badge")
-          i(class="fa-solid fa-user-shield")
-          span(id="user") 连接中...
-        
-        button(class="btn btn-outline-danger btn-compact", onclick="clearHistory()", title="清空聊天记录")
-          i(class="fa-solid fa-trash-can")
-          span(class="btn-text") 清空记录
-
-        button(class="btn btn-outline-primary btn-compact mobile-only", onclick="toggleMobileSidebar()", title="查看在线成员与共享文件")
-          i(class="fa-solid fa-users")
-          span(class="badge badge-header", id="header-online-count") 0
-
-        a(class="btn btn-github btn-compact desktop-only", href="https://github.com/liceal/chatroom_express", target="_blank", title="查看源码")
-          i(class="fa-brands fa-github")
-          span(class="btn-text") GitHub
-
-    // Main App Area
+    // Main App Area (Zero-margin, full height)
     main(class="app-main")
       // Chat Section
       section(class="chat-section")
+        // Integrated Slim Header Bar
+        div(class="chat-header-bar")
+          div(class="chat-header-left")
+            span(class="status-dot", title="实时连接正常")
+            span(class="brand-mini-title") Socket Chat
+            div(class="user-badge-mini", id="user-badge")
+              i(class="fa-solid fa-user-shield")
+              span(id="user") 连接中...
+
+          div(class="chat-header-right")
+            button(class="btn-icon-mini", onclick="clearHistory()", title="清空聊天记录")
+              i(class="fa-solid fa-trash-can")
+              span(class="btn-mini-text") 清空
+
+            button(class="btn-icon-mini mobile-only", onclick="toggleMobileSidebar()", title="查看在线成员与共享文件")
+              i(class="fa-solid fa-users")
+              span(class="badge-mini", id="header-online-count") 0
+
+            button(class="btn-icon-mini desktop-only active", id="desktop-sidebar-toggle-btn", onclick="toggleDesktopSidebar()", title="缩进/展开侧边栏 (在线成员与共享仓库)")
+              i(class="fa-solid fa-table-columns", id="sidebar-toggle-icon")
+              span(class="btn-mini-text", id="sidebar-toggle-text") 侧栏
+              span(class="badge-mini", id="desktop-sidebar-count") 0
+
+            button(type="button", class="active-call-badge hidden", id="active-call-badge", onclick="toggleRtcPanel(true)", title="通话正在后台进行中，点击返回视讯界面")
+              span(class="call-indicator-dot")
+              span(class="call-indicator-text") 通话中
+              i(class="fa-solid fa-expand")
+
+            a(class="btn-icon-mini desktop-only", href="https://github.com/liceal/chatroom_express", target="_blank", title="查看源码")
+              i(class="fa-brands fa-github")
+
+        // Minimized Active Call Floating Strip (Shows when call is ongoing but video window is hidden)
+        div(id="rtc-minimized-banner", class="rtc-minimized-banner hidden", onclick="toggleRtcPanel(true)")
+          div(class="minimized-banner-inner")
+            span(class="call-indicator-dot")
+            span(class="minimized-banner-text") 视讯通话进行中
+            span(class="minimized-banner-btn")
+              span 点击返回视讯
+              i(class="fa-solid fa-chevron-right")
+
+        // WebRTC Video Room Docked at Top of Chat (Pushes chat down, never floats over!)
+        div(id="rtc-drawer", class="rtc-drawer hidden")
+          div(class="rtc-drawer-content")
+            include webrtc
+
         div(class="chat-messages", id="content")
           div(class="chat-welcome")
             i(class="fa-solid fa-shield-cat")
-            p 欢迎来到加密即时通讯房间！聊天记录实时多端同步。
+            p 欢迎来到即时通讯房间！聊天记录实时多端同步。
 
         button(id="scroll-bottom-btn", class="scroll-bottom-btn hidden", onclick="scrollToBottom()", title="回底查看最新消息")
           i(class="fa-solid fa-arrow-down")
 
         div(class="chat-input-wrapper")
-          div(id="emoji-picker", class="emoji-picker hidden")
-
           div(class="input-toolbar")
-            button(class="tool-btn", id="emoji-toggle-btn", onclick="toggleEmojiPicker()", title="插入表情包")
+            button(class="tool-btn", id="emoji-toggle-btn", onclick="toggleEmojiPicker(event)", title="插入表情包")
               i(class="fa-regular fa-face-smile")
               span 表情
 
@@ -66,9 +81,9 @@ block content
               input(type="file", id="sendImage", accept="image/*", style="display:none")
               span 图片
 
-            button(class="tool-btn", id="toggle-rtc-btn", onclick="toggleRtcPanel()", title="开启音视频通话")
-              i(class="fa-solid fa-video")
-              span 视频房间
+            button(class="tool-btn", id="toggle-rtc-btn", onclick="openCallLaunchpad()", title="发起一对一视频或新建群聊天室")
+              i(class="fa-solid fa-phone-volume")
+              span 视讯通话
 
           div(class="input-box-row")
             div(contenteditable="true", id="sendMsgDiv", class="chat-input", placeholder="输入消息...")
@@ -76,15 +91,17 @@ block content
               i(class="fa-solid fa-paper-plane")
               span 发送
 
+          div(id="emoji-picker", class="emoji-picker hidden")
+
       // Mobile Backdrop Overlay
       div(id="sidebar-overlay", class="sidebar-overlay mobile-only", onclick="toggleMobileSidebar()")
 
-      // Sidebar Panel
+      // Sidebar Panel (Right Column on Desktop, Drawer on Mobile)
       aside(class="app-sidebar")
         div(class="mobile-sidebar-header mobile-only")
           h3
             i(class="fa-solid fa-users-gear")
-            | 房间控制台
+            | 控制中心
           button(class="btn-icon", onclick="toggleMobileSidebar()", title="关闭")
             i(class="fa-solid fa-xmark")
 
@@ -94,7 +111,10 @@ block content
             h3
               i(class="fa-solid fa-users")
               | 在线成员
-            span(class="badge", id="online-count") 0
+            div(class="panel-header-actions")
+              span(class="badge", id="online-count") 0
+              button(type="button", class="btn-sidebar-collapse desktop-only", onclick="toggleDesktopSidebar(false)", title="缩进/收起侧边栏")
+                i(class="fa-solid fa-angles-right")
           div(class="panel-body", id="list")
 
         // File Manager Panel
@@ -103,22 +123,71 @@ block content
             h3
               i(class="fa-solid fa-folder-open")
               | 共享文件仓库
-            span(class="badge", id="file-count") 0
+            div(class="panel-header-actions")
+              span(class="badge", id="file-count") 0
           div(class="panel-body", id="files")
 
-    // WebRTC Video Call Drawer (Hidden by default)
-    div(id="rtc-drawer", class="rtc-drawer hidden")
-      div(class="rtc-drawer-header")
-        h3
-          i(class="fa-solid fa-headset")
-          | WebRTC 音视频频道
-        button(class="btn-icon", onclick="toggleRtcPanel()")
-          i(class="fa-solid fa-xmark")
-      div(class="rtc-drawer-content")
-        include webrtc
+      // PC Collapsible Edge Toggle Handle (Docked to divider or right screen edge)
+      button(type="button", class="sidebar-edge-toggle desktop-only", id="sidebar-edge-toggle", onclick="toggleDesktopSidebar()", title="缩进/收起侧边栏")
+        i(class="fa-solid fa-angles-right")
 
     // Fullscreen Image Lightbox Modal
     div(id="image-modal", class="image-modal hidden", onclick="if(event.target===this) closeImageModal()")
       span(class="modal-close-btn", onclick="closeImageModal()") &times;
       img(id="modal-img-content", class="modal-img-content")
+
+    // Incoming 1-on-1 Direct Call Notification Modal
+    div(id="incoming-call-modal", class="incoming-call-modal hidden")
+      div(class="incoming-call-card")
+        div(class="incoming-call-avatar")
+          i(class="fa-solid fa-phone-volume")
+        div(class="incoming-call-info")
+          div(class="incoming-call-title") 一对一音视频来电
+          div(class="incoming-call-name", id="incoming-caller-name") 用户 正在呼叫你...
+        div(class="incoming-call-actions")
+          button(type="button", class="btn-call-action btn-accept", onclick="acceptDirectCall()", title="接听通话")
+            i(class="fa-solid fa-phone")
+            span 接听
+          button(type="button", class="btn-call-action btn-reject", onclick="rejectDirectCall()", title="拒绝通话")
+            i(class="fa-solid fa-phone-slash")
+            span 拒绝
+
+    // Call Launchpad Modal (1-on-1 Call vs Create Group Room)
+    div(id="call-launchpad-modal", class="call-launchpad-modal hidden", onclick="if(event.target===this) closeCallLaunchpad()")
+      div(class="call-launchpad-card")
+        div(class="launchpad-header")
+          h3
+            i(class="fa-solid fa-phone-volume")
+            | 视讯通话控制台
+          span(class="launchpad-close-btn", onclick="closeCallLaunchpad()") &times;
+        
+        // Segmented Tabs: 1-on-1 Call vs Create Group Room
+        div(class="launchpad-tabs-bar")
+          button(type="button", class="launchpad-tab-btn active", id="tab-btn-direct", onclick="switchLaunchpadTab('direct')")
+            i(class="fa-solid fa-user")
+            span 一对一视频
+          button(type="button", class="launchpad-tab-btn", id="tab-btn-group", onclick="switchLaunchpadTab('group')")
+            i(class="fa-solid fa-users")
+            span 新建聊天室
+
+        // Tab 1: 1-on-1 Call List
+        div(id="launchpad-tab-direct", class="launchpad-tab-content")
+          div(class="launchpad-section-tip") 选择在线好友进行专属一对一通话：
+          div(id="launchpad-user-list", class="launchpad-user-list")
+            div(class="launchpad-empty-tip") 暂无其他在线好友
+
+        // Tab 2: Create Group Video Room
+        div(id="launchpad-tab-group", class="launchpad-tab-content hidden")
+          div(class="launchpad-section-tip") 创建群视频房间，并向公屏发送邀请卡片：
+          div(class="launchpad-form-group")
+            label(class="launchpad-label") 聊天室主题 / 名称
+            input(type="text", id="launchpad-room-input", class="launchpad-input", placeholder="例如：技术讨论 / 闲聊茶话会", maxlength="30")
+          div(class="launchpad-quick-tags")
+            span(class="launchpad-tag-chip", onclick="selectQuickRoomTag('日常闲聊')") ☕ 日常闲聊
+            span(class="launchpad-tag-chip", onclick="selectQuickRoomTag('技术研讨')") 💻 技术研讨
+            span(class="launchpad-tag-chip", onclick="selectQuickRoomTag('开黑连麦')") 🎮 开黑连麦
+            span(class="launchpad-tag-chip", onclick="selectQuickRoomTag('团队会议')") 📊 团队会议
+          button(type="button", class="btn-create-room", onclick="submitCreateGroupRoom()")
+            i(class="fa-solid fa-rocket")
+            span 开启群视频并邀请
 

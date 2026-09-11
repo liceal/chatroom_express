@@ -1,43 +1,69 @@
-div(class="rtc-container")
-  // Control Panel & Local Video Stream
-  div(class="rtc-local-panel")
-    div(class="video-wrapper local-video-wrapper")
-      video(id="local-video", playsinline, autoplay, muted)
-      div(class="video-label") 本地摄像头 (我)
+div(class="rtc-module-header desktop-only")
+  div(class="rtc-module-header-left")
+    span(class="status-dot")
+    span(class="rtc-module-title") 视讯通话
+    span(class="badge-mini", id="rtc-header-badge") 进行中
+  div(class="rtc-module-header-right")
+    button(type="button", class="btn-icon-mini", onclick="toggleDesktopSidebar()", title="展开/收起成员与文件")
+      i(class="fa-solid fa-users")
+    button(type="button", class="btn-icon-mini", onclick="handleCloseRtcPanel()", title="退出并关闭音视频")
+      i(class="fa-solid fa-xmark")
 
-    div(class="rtc-controls")
-      div(class="control-toggles")
-        label(class="toggle-item")
-          input(id="audio-checkbox", type="checkbox", checked)
-          span 开启麦克风
+div(class="rtc-stage-container", id="rtc-stage-container")
+  // Left / Top: Main Large Stage (Focused Speaker / Local User)
+  div(class="rtc-main-stage", id="rtc-main-stage")
+    // Clever Micro Badge (Participant Status, no bulky title)
+    div(class="rtc-stage-badge", id="rtc-main-badge")
+      span(class="stage-status-dot", id="stage-status-dot")
+      span(id="stage-user-title") 本地 (我)
+      span(class="stage-count-pill hidden", id="stage-count-pill") 1人
 
-        label(class="toggle-item")
-          input(id="video-checkbox", type="checkbox", checked)
-          span 开启摄像头
+    // Corner Floating Close Button
+    button(type="button", class="btn-rtc-corner-close", onclick="handleCloseRtcPanel()", title="退出并关闭音视频 (释放麦克风)")
+      i(class="fa-solid fa-xmark")
 
-      div(class="control-actions")
-        button(id="preview-button", class="btn btn-sm btn-primary")
-          i(class="fa-solid fa-camera")
-          | 预览
-        button(id="join-channel-button", class="btn btn-sm btn-success")
-          i(class="fa-solid fa-right-to-bracket")
-          | 加入频道
-        button(id="leave-channel-button", class="btn btn-sm btn-danger", disabled)
-          i(class="fa-solid fa-right-from-bracket")
-          | 退出频道
+    // Video Stream Element
+    video(id="main-stage-video", playsinline, autoplay, muted)
 
-  // Channel Members List
-  div(class="rtc-channel-members")
-    div(class="panel-sub-header")
-      h4
-        i(class="fa-solid fa-signal")
-        | 频道在线成员 (点击呼叫)
-    div(id="remote-list", class="channel-user-grid")
+    // Audio-Only Placeholder (Active when camera is off)
+    div(id="main-stage-audio", class="audio-placeholder hidden")
+      div(class="audio-pulse-ring")
+      div(class="audio-avatar")
+        i(class="fa-solid fa-microphone-lines")
 
-  // Remote Video Call Grid
-  div(class="rtc-remote-grid-panel")
-    div(class="panel-sub-header")
-      h4
-        i(class="fa-solid fa-video")
-        | 远端视频通话列表
-    div(id="rtc-remote-list", class="rtc-remote-grid")
+    // Outgoing Calling Waiting Overlay (Visible while calling peer and awaiting answer)
+    div(id="rtc-calling-overlay", class="rtc-calling-overlay hidden")
+      div(class="calling-avatar")
+        i(class="fa-solid fa-phone-volume")
+      div(class="calling-status-text", id="calling-status-text") 正在呼叫对方...
+      div(class="calling-subtext") 等待对方接听中
+      button(type="button", class="btn-cancel-call", onclick="cancelDirectCall()", title="取消呼叫") 取消呼叫
+
+    // Hidden Checkboxes for Compatibility
+    input(id="audio-checkbox", type="checkbox", checked, style="display:none")
+    input(id="video-checkbox", type="checkbox", checked, style="display:none")
+
+  // Right: Gallery Column for other participants (Compact Thumbnails)
+  div(class="rtc-thumbs-gallery hidden", id="rtc-thumbs-gallery")
+
+// 视讯通话控制栏（极简居中图标按钮设计，无冗余文字换行，杜绝意外收起）
+div(class="rtc-bottom-bar", id="rtc-bottom-bar")
+  div(class="rtc-floating-controls", id="rtc-floating-controls")
+    button(type="button", id="mic-toggle-btn", class="rtc-ctrl-btn active", title="静音 / 开麦")
+      i(class="fa-solid fa-microphone")
+
+    button(type="button", id="cam-toggle-btn", class="rtc-ctrl-btn active", title="关闭 / 开启摄像头")
+      i(class="fa-solid fa-video")
+
+    button(type="button", id="preview-button", class="rtc-ctrl-btn desktop-only", title="开启设备预览")
+      i(class="fa-solid fa-camera")
+
+    button(type="button", id="join-channel-button", class="rtc-ctrl-btn btn-success hidden", title="发起通话 / 邀请好友", style="display:none")
+      i(class="fa-solid fa-phone")
+
+    button(type="button", id="leave-channel-button", class="rtc-ctrl-btn btn-danger hidden", title="挂断离开通话")
+      i(class="fa-solid fa-phone-slash")
+      span(class="ctrl-label") 挂断
+
+  // Hidden Audio Sink for Background Remote Streams
+  div(id="rtc-audio-sink", style="display:none")

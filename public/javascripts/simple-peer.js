@@ -66,18 +66,21 @@ constraints.video.facingMode = {
   ideal: "user",
 };
 
-// enabling the camera at startup
-navigator.mediaDevices
-  .getUserMedia(constraints)
-  .then((stream) => {
-    console.log("Received local stream");
+// enabling the camera at startup only if on the simple-peer demo page
+if (typeof window !== "undefined" && document.getElementById("localVideo")) {
+  navigator.mediaDevices
+    .getUserMedia(constraints)
+    .then((stream) => {
+      console.log("Received local stream");
 
-    localVideo.srcObject = stream;
-    localStream = stream;
+      const vid = document.getElementById("localVideo");
+      if (vid) vid.srcObject = stream;
+      localStream = stream;
 
-    init();
-  })
-  .catch((e) => alert(`getusermedia error ${e.name}`));
+      init();
+    })
+    .catch((e) => console.warn(`getusermedia error ${e.name}`));
+}
 
 /**
  * initialize the socket connections
