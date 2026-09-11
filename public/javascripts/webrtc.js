@@ -69,6 +69,7 @@
     let channelUsers = new Set();
     let isMicEnabled = true;
     let isCamEnabled = true;
+    let isDevicePreview = false;
 
     // 通话模式: "idle" | "direct" (一对一专属通话) | "group" (群体聊天室会议)
     let callMode = "idle";
@@ -202,27 +203,120 @@
       }
     }
 
+    // 同步视讯底栏控制按钮显示状态 (设备预览模式 vs 通话模式 vs 空闲模式)
+    function updateControlBarButtons() {
+      if (inChannel) {
+        // 通话进行中：隐藏开启设备预览、隐藏发起通话，显示挂断按钮
+        if (previewButton) {
+          previewButton.classList.add("hidden");
+          previewButton.style.display = "none";
+        }
+        if (joinChannelButton) {
+          joinChannelButton.classList.add("hidden");
+          joinChannelButton.style.display = "none";
+        }
+        if (leaveChannelButton) {
+          leaveChannelButton.classList.remove("hidden");
+          leaveChannelButton.style.display = "";
+          leaveChannelButton.disabled = false;
+        }
+      } else if (isDevicePreview || (!inChannel && localStream)) {
+        // 设备预览自检中：显示退出预览按钮(高亮)、显示发起通话按钮，隐藏挂断按钮
+        if (previewButton) {
+          previewButton.classList.remove("hidden");
+          previewButton.style.display = "";
+          previewButton.classList.add("active");
+          previewButton.title = "退出预览 (释放麦克风与摄像头)";
+        }
+        if (joinChannelButton) {
+          joinChannelButton.classList.remove("hidden");
+          joinChannelButton.style.display = "";
+          joinChannelButton.disabled = false;
+          joinChannelButton.title = "发起通话 / 邀请好友";
+        }
+        if (leaveChannelButton) {
+          leaveChannelButton.classList.add("hidden");
+          leaveChannelButton.style.display = "none";
+        }
+      } else {
+        // 空闲状态：如果面板开启，允许使用设备预览
+        if (previewButton) {
+          previewButton.classList.remove("hidden");
+          previewButton.style.display = "";
+          previewButton.classList.remove("active");
+          previewButton.title = "开启设备预览";
+        }
+        if (joinChannelButton) {
+          joinChannelButton.classList.add("hidden");
+          joinChannelButton.style.display = "none";
+        }
+        if (leaveChannelButton) {
+          leaveChannelButton.classList.add("hidden");
+          leaveChannelButton.style.display = "none";
+        }
+      }
+    }
+
+    // 开启设备与画面自检预览
+    async function startDevicePreview() {
+      if (inChannel) {
+        showAlert("当前正在通话中，摄像头已在正常使用", "info");
+        return false;
+      }
+      isDevicePreview = true;
+
+      // 展开视讯抽屉/面板 (PC展开侧边模块，移动端压下抽屉)
+      if (typeof toggleRtcPanel === "function") {
+        toggleRtcPanel(true);
+      }
+
+      // 初始化本地媒体流 (真实摄像头或无感虚拟流)
+      let success = true;
+      if (!localStream) {
+        success = await initLocalMedia();
+      }
+      if (!success) {
+        isDevicePreview = false;
+        if (typeof toggleRtcPanel === "function") {
+          toggleRtcPanel(false);
+        }
+        return false;
+      }
+
+      updateControlBarButtons();
+      renderMultiStage();
+      showAlert("已开启设备自检与画面预览", "success");
+      return true;
+    }
+    window.startDevicePreview = startDevicePreview;
+
+    // 停止设备自检预览 (彻底释放麦克风与摄像头并收起面板)
+    function stopDevicePreview(shouldClosePanel = true) {
+      isDevicePreview = false;
+      releaseLocalMedia();
+
+      if (shouldClosePanel && typeof toggleRtcPanel === "function") {
+        toggleRtcPanel(false);
+      }
+
+      updateControlBarButtons();
+      renderMultiStage();
+      showAlert("已停止设备预览并释放麦克风与摄像头", "info");
+    }
+    window.stopDevicePreview = stopDevicePreview;
+    window.isDevicePreviewing = () => isDevicePreview;
+
     // 预览摄像头与麦克风设备 (支持切换开启/关闭并彻底释放硬件)
     if (previewButton) {
       previewButton.onclick = async () => {
         if (inChannel) {
-          showAlert("当前正在通话中", "info");
+          showAlert("当前正在通话中，摄像头与麦克风已在运行", "info");
           return;
         }
-        if (localStream) {
-          // 再次点击 -> 退出预览并彻底释放麦克风与摄像头
-          releaseLocalMedia();
-          renderMultiStage();
-          showAlert("已停止设备预览并释放麦克风", "info");
+        if (isDevicePreview || localStream) {
+          stopDevicePreview(true);
         } else {
-          // 点击开启 -> 初始化预览设备
-          const success = await initLocalMedia();
-          if (success) {
-            previewButton.classList.add("active");
-            previewButton.title = "关闭设备预览 (释放麦克风)";
-            renderMultiStage();
-            showAlert("已开启设备预览", "info");
-          }
+          await startDevicePreview();
         }
       };
     }
@@ -530,6 +624,7 @@
 
       callMode = "group";
       currentDirectPeer = null;
+      isDevicePreview = false;
 
       if (!localStream) {
         let success = await initLocalMedia();
@@ -679,6 +774,7 @@
       }
 
       inChannel = false;
+      isDevicePreview = false;
       callMode = "idle";
       currentDirectPeer = null;
       currentRoomId = "default";
@@ -760,6 +856,7 @@
       callMode = "direct";
       currentDirectPeer = targetId;
       isDirectCallingWait = true;
+      isDevicePreview = false;
 
       if (typeof toggleRtcPanel === "function") {
         toggleRtcPanel(true);
@@ -834,6 +931,7 @@
       callMode = "direct";
       currentDirectPeer = callerId;
       isDirectCallingWait = false;
+      isDevicePreview = false;
 
       const overlay = document.getElementById("rtc-calling-overlay");
       if (overlay) overlay.classList.add("hidden");
@@ -1293,7 +1391,10 @@
 
       // 3. 巧妙指示人数 (零空间占用的微型状态胶囊)
       if (stageCountPill) {
-        if (callMode === "direct") {
+        if (isDevicePreview || (!inChannel && localStream)) {
+          stageCountPill.classList.remove("hidden");
+          stageCountPill.innerText = "设备预览";
+        } else if (callMode === "direct") {
           stageCountPill.classList.remove("hidden");
           if (isDirectCallingWait) {
             stageCountPill.innerText = "正在呼叫...";
@@ -1315,7 +1416,9 @@
       // 4. 渲染左侧大块 (Main Stage) - 展示 focusedUserId
       const isFocusedMe = (focusedUserId === localID) || (typeof socket !== "undefined" && socket && focusedUserId === socket.id);
       if (stageUserTitle) {
-        if (callMode === "direct") {
+        if (isDevicePreview || (!inChannel && localStream)) {
+          stageUserTitle.innerText = "本地 (我) · 设备预览检测中";
+        } else if (callMode === "direct") {
           if (isDirectCallingWait) {
             stageUserTitle.innerText = `呼叫中: ${currentDirectPeer ? currentDirectPeer.substring(0, 6) : ""}...`;
           } else {
@@ -1335,6 +1438,20 @@
               ? "本地 (我)"
               : `用户 ${focusedUserId.substring(0, 6)}...`;
           }
+        }
+      }
+
+      const rtcHeaderBadge = document.getElementById("rtc-header-badge");
+      if (rtcHeaderBadge) {
+        if (isDevicePreview || (!inChannel && localStream)) {
+          rtcHeaderBadge.innerText = "预览检测";
+          rtcHeaderBadge.className = "badge-mini badge-preview";
+        } else if (inChannel) {
+          rtcHeaderBadge.innerText = "进行中";
+          rtcHeaderBadge.className = "badge-mini";
+        } else {
+          rtcHeaderBadge.innerText = "待命";
+          rtcHeaderBadge.className = "badge-mini";
         }
       }
 
@@ -1435,6 +1552,7 @@
         });
       }
       resetControlsAutoHide();
+      updateControlBarButtons();
     }
 
     // 退出并关闭音视频抽屉 (供右上角 X 按钮调用)
@@ -1442,10 +1560,7 @@
       if (inChannel) {
         handleLeaveChannel(true);
       } else {
-        releaseLocalMedia();
-      }
-      if (typeof toggleRtcPanel === "function") {
-        toggleRtcPanel(false);
+        stopDevicePreview(true);
       }
     };
 
@@ -1459,7 +1574,7 @@
       if (inChannel) {
         handleLeaveChannel(false);
       } else {
-        releaseLocalMedia();
+        stopDevicePreview(false);
       }
     });
 
@@ -1467,7 +1582,7 @@
       if (inChannel) {
         handleLeaveChannel(false);
       } else {
-        releaseLocalMedia();
+        stopDevicePreview(false);
       }
     });
 
@@ -1478,6 +1593,9 @@
       getFocusedUser: () => focusedUserId,
       getLocalStream: () => localStream,
       isMicActive: () => !!localStream && localStream.getAudioTracks().some((t) => t.readyState === "live"),
+      isDevicePreview: () => isDevicePreview,
+      startDevicePreview: startDevicePreview,
+      stopDevicePreview: stopDevicePreview,
       renderMultiStage: renderMultiStage,
       releaseLocalMedia: releaseLocalMedia,
     };

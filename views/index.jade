@@ -191,3 +191,15 @@ block content
             i(class="fa-solid fa-rocket")
             span 开启群视频并邀请
 
+        // Pre-call Device Self-check & Preview Banner
+        div(class="launchpad-preview-bar")
+          div(class="launchpad-preview-info")
+            div(class="launchpad-preview-icon")
+              i(class="fa-solid fa-camera-rotate")
+            div(class="launchpad-preview-text")
+              div(class="launchpad-preview-title") 设备自检与画面预览
+              div(class="launchpad-preview-desc", id="launchpad-preview-desc") 测试麦克风音量与摄像头画面
+          button(type="button", id="btn-launchpad-preview", class="btn-launchpad-preview", onclick="startDevicePreviewFromLaunchpad()", title="开启设备与画面预览检测")
+            i(class="fa-solid fa-expand")
+            span 开启预览
+

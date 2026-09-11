@@ -55,11 +55,12 @@ div(class="rtc-bottom-bar", id="rtc-bottom-bar")
     button(type="button", id="cam-toggle-btn", class="rtc-ctrl-btn active", title="关闭 / 开启摄像头")
       i(class="fa-solid fa-video")
 
-    button(type="button", id="preview-button", class="rtc-ctrl-btn desktop-only", title="开启设备预览")
+    button(type="button", id="preview-button", class="rtc-ctrl-btn", title="开启设备预览")
       i(class="fa-solid fa-camera")
 
     button(type="button", id="join-channel-button", class="rtc-ctrl-btn btn-success hidden", title="发起通话 / 邀请好友", style="display:none")
       i(class="fa-solid fa-phone")
+      span(class="ctrl-label") 发起通话
 
     button(type="button", id="leave-channel-button", class="rtc-ctrl-btn btn-danger hidden", title="挂断离开通话")
       i(class="fa-solid fa-phone-slash")

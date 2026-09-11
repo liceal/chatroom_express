@@ -1069,12 +1069,57 @@ function openCallLaunchpad(defaultTab = "direct") {
     toggleRtcPanel(true);
     return;
   }
+  // 如果当前处于设备预览中但面板被收起，点击直接展开视讯界面
+  const drawer = document.getElementById("rtc-drawer");
+  if (typeof window.isDevicePreviewing === "function" && window.isDevicePreviewing() && drawer && drawer.classList.contains("hidden")) {
+    toggleRtcPanel(true);
+    return;
+  }
   const modal = document.getElementById("call-launchpad-modal");
   if (!modal) return;
   modal.classList.remove("hidden");
   switchLaunchpadTab(defaultTab);
   renderLaunchpadUserList();
+  updateLaunchpadPreviewStatus();
 }
+
+function updateLaunchpadPreviewStatus() {
+  const isPreviewing = (typeof window.isDevicePreviewing === "function" && window.isDevicePreviewing()) ||
+                       (typeof window.hasLocalStream === "function" && window.hasLocalStream() && typeof window.isRtcInChannel === "function" && !window.isRtcInChannel());
+  const btn = document.getElementById("btn-launchpad-preview");
+  const desc = document.getElementById("launchpad-preview-desc");
+  if (btn) {
+    if (isPreviewing) {
+      btn.innerHTML = '<i class="fa-solid fa-stop"></i><span>停止预览</span>';
+      btn.classList.add("active");
+      btn.title = "退出设备预览并释放硬件资源";
+    } else {
+      btn.innerHTML = '<i class="fa-solid fa-expand"></i><span>开启预览</span>';
+      btn.classList.remove("active");
+      btn.title = "开启设备自检与画面预览";
+    }
+  }
+  if (desc) {
+    desc.innerText = isPreviewing ? "预览检测进行中，可直接呼叫或停止释放" : "呼叫前测试麦克风音量与摄像头画面";
+  }
+}
+window.updateLaunchpadPreviewStatus = updateLaunchpadPreviewStatus;
+
+function startDevicePreviewFromLaunchpad() {
+  const isPreviewing = (typeof window.isDevicePreviewing === "function" && window.isDevicePreviewing()) ||
+                       (typeof window.hasLocalStream === "function" && window.hasLocalStream() && typeof window.isRtcInChannel === "function" && !window.isRtcInChannel());
+  closeCallLaunchpad();
+  if (isPreviewing) {
+    if (typeof window.stopDevicePreview === "function") {
+      window.stopDevicePreview(true);
+    }
+  } else {
+    if (typeof window.startDevicePreview === "function") {
+      window.startDevicePreview();
+    }
+  }
+}
+window.startDevicePreviewFromLaunchpad = startDevicePreviewFromLaunchpad;
 
 function closeCallLaunchpad() {
   const modal = document.getElementById("call-launchpad-modal");
@@ -1343,8 +1388,12 @@ function toggleRtcPanel(forceState) {
     restoreDesktopSidebarIfAutoCollapsed();
 
     // 若未在通话中（仅开启了预览），收起面板时立即释放麦克风与摄像头硬件
-    if (typeof window.isRtcInChannel === "function" && !window.isRtcInChannel() && typeof window.releaseLocalMedia === "function") {
-      window.releaseLocalMedia();
+    if (typeof window.isRtcInChannel === "function" && !window.isRtcInChannel()) {
+      if (typeof window.stopDevicePreview === "function") {
+        window.stopDevicePreview(false);
+      } else if (typeof window.releaseLocalMedia === "function") {
+        window.releaseLocalMedia();
+      }
     }
   }
 

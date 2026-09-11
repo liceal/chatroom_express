@@ -1422,6 +1422,10 @@ body {
     flex-shrink: 0 !important;
   }
 
+  .chat-section.has-rtc .rtc-bottom-bar .rtc-ctrl-btn.hidden {
+    display: none !important;
+  }
+
   .chat-section.has-rtc .rtc-bottom-bar .rtc-ctrl-btn.btn-danger {
     width: auto !important;
     min-width: 76px !important;
@@ -1439,6 +1443,27 @@ body {
   }
 
   .chat-section.has-rtc .rtc-bottom-bar .rtc-ctrl-btn.btn-danger .ctrl-label {
+    white-space: nowrap !important;
+    display: inline-block !important;
+  }
+
+  .chat-section.has-rtc .rtc-bottom-bar .rtc-ctrl-btn.btn-success {
+    width: auto !important;
+    min-width: 86px !important;
+    height: 36px !important;
+    padding: 0 14px !important;
+    border-radius: 18px !important;
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    border: 1px solid #10b981 !important;
+    color: #fff !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35) !important;
+  }
+
+  .chat-section.has-rtc .rtc-bottom-bar .rtc-ctrl-btn.btn-success .ctrl-label {
     white-space: nowrap !important;
     display: inline-block !important;
   }
@@ -1800,6 +1825,10 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
   }
 
+  .rtc-bottom-bar .rtc-ctrl-btn.hidden {
+    display: none !important;
+  }
+
   .rtc-bottom-bar .rtc-ctrl-btn.active {
     background: rgba(59, 130, 246, 0.25) !important;
     border-color: var(--primary) !important;
@@ -1823,6 +1852,28 @@ body {
   }
 
   .rtc-bottom-bar .rtc-ctrl-btn.btn-danger .ctrl-label {
+    white-space: nowrap !important;
+    display: inline-block !important;
+    font-size: 0.72rem !important;
+  }
+
+  .rtc-bottom-bar .rtc-ctrl-btn.btn-success {
+    width: auto !important;
+    min-width: 66px !important;
+    height: 28px !important;
+    padding: 0 10px !important;
+    border-radius: 14px !important;
+    background: linear-gradient(135deg, #10b981, #059669) !important;
+    border: 1px solid #059669 !important;
+    color: #fff !important;
+    gap: 4px !important;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.45) !important;
+  }
+
+  .rtc-bottom-bar .rtc-ctrl-btn.btn-success .ctrl-label {
     white-space: nowrap !important;
     display: inline-block !important;
     font-size: 0.72rem !important;
@@ -2731,6 +2782,98 @@ body {
 
 .btn-create-room:active {
   transform: translateY(1px) scale(0.98);
+}
+
+/* Pre-call Device Preview Banner in Call Launchpad */
+.launchpad-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 14px;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.launchpad-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.launchpad-preview-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #818cf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.launchpad-preview-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.launchpad-preview-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.launchpad-preview-desc {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.btn-launchpad-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.85), rgba(79, 70, 229, 0.95));
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+.btn-launchpad-preview:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 1), rgba(79, 70, 229, 1));
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-launchpad-preview.active {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: #f87171;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+.badge-preview {
+  background: rgba(59, 130, 246, 0.25) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
 }
 
 /* ==========================================================================
