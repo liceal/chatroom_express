@@ -802,10 +802,14 @@ function initEmojiPicker() {
   // 始终使用高响应纯前端轻量面板
   renderMultiCategoryPicker();
 
-  // 手势引擎：在输入栏与表情区域按住向下滑动收起表情框
+  // 表情面板生命周期与状态控制变量
+  let emojiDismissTimer = null;
+  let emojiPickerOpenTime = 0;
+  let programmaticScrollUntil = 0;
+
+  // 手势引擎：在表情区域顶部向下滑动收起表情框
   function initEmojiDragDismiss() {
-    const inputWrapper = document.querySelector(".chat-input-wrapper");
-    if (!inputWrapper || !picker) return;
+    if (!picker) return;
 
     let startY = 0;
     let startX = 0;
@@ -815,7 +819,8 @@ function initEmojiPicker() {
 
     function onStart(clientY, clientX, target) {
       if (picker.classList.contains("hidden")) return;
-      if (!inputWrapper.contains(target) && !picker.contains(target)) return;
+      // 仅限在表情面板内部触发，绝不污染表情按钮和输入框
+      if (!picker.contains(target)) return;
 
       const grid = document.getElementById("emoji-grid");
       if (grid && grid.contains(target)) {
@@ -840,8 +845,8 @@ function initEmojiPicker() {
       const deltaY = clientY - startY;
       const deltaX = clientX - startX;
 
-      // 仅当向下拖拽、垂直位移占主导且表情网格处于顶部时接管滑动
-      if (deltaY > 6 && Math.abs(deltaY) > Math.abs(deltaX) && gridScrollTop <= 0) {
+      // 仅当下滑位移显著、垂直方向主导且网格滚到最顶端时响应下拉收起
+      if (deltaY > 12 && Math.abs(deltaY) > Math.abs(deltaX) * 1.3 && gridScrollTop <= 0) {
         isDraggingDown = true;
         if (e.cancelable) {
           e.preventDefault();
@@ -860,19 +865,21 @@ function initEmojiPicker() {
       if (isDraggingDown) {
         isDraggingDown = false;
         const totalDelta = clientY - startY;
-        if (totalDelta > 25) {
-          // 向下滑动距离足够 -> 缩回表情框
-          picker.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, max-height 0.24s ease";
+        if (totalDelta > 30) {
+          // 向下滑动距离充足 -> 平滑收回表情面板
+          picker.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease";
           picker.style.transform = "translateY(50px)";
           picker.style.opacity = "0";
-          setTimeout(() => {
+          if (emojiDismissTimer) clearTimeout(emojiDismissTimer);
+          emojiDismissTimer = setTimeout(() => {
             toggleEmojiPicker(false);
             picker.style.transform = "";
             picker.style.opacity = "";
             picker.style.transition = "";
+            emojiDismissTimer = null;
           }, 200);
         } else {
-          // 滑动距离不足 -> 回弹复位
+          // 滑动距离不足 -> 弹性复位
           picker.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease";
           picker.style.transform = "translateY(0)";
           picker.style.opacity = "1";
@@ -885,12 +892,12 @@ function initEmojiPicker() {
       }
     }
 
-    // 移动端 Touch 触摸事件
-    inputWrapper.addEventListener("touchstart", (e) => {
+    // 仅监听表情面板本身的触摸事件
+    picker.addEventListener("touchstart", (e) => {
       if (e.touches.length === 1) {
         onStart(e.touches[0].clientY, e.touches[0].clientX, e.target);
       }
-    }, { passive: false });
+    }, { passive: true });
 
     document.addEventListener("touchmove", (e) => {
       if (isTracking && e.touches.length === 1) {
@@ -908,50 +915,48 @@ function initEmojiPicker() {
     document.addEventListener("touchcancel", () => {
       if (isTracking) onEnd(startY);
     });
-
-    // 桌面端 Pointer/Mouse 鼠标拖拽事件
-    inputWrapper.addEventListener("pointerdown", (e) => {
-      if (e.button === 0) {
-        onStart(e.clientY, e.clientX, e.target);
-      }
-    });
-
-    document.addEventListener("pointermove", (e) => {
-      if (isTracking) {
-        onMove(e.clientY, e.clientX, e);
-      }
-    });
-
-    document.addEventListener("pointerup", (e) => {
-      if (isTracking) onEnd(e.clientY);
-    });
-
-    document.addEventListener("pointercancel", () => {
-      if (isTracking) onEnd(startY);
-    });
   }
 
   initEmojiDragDismiss();
 
-  // 点击外部自动关闭表情包
+  // 点击外部自动关闭表情包 (带打开时延防误触保护)
   document.addEventListener("click", (e) => {
     const btn = document.getElementById("emoji-toggle-btn");
     if (!picker || picker.classList.contains("hidden")) return;
+    // 刚打开 250ms 内忽略外部点击，防止移动端合成 click 事件导致瞬间闪退
+    if (Date.now() - emojiPickerOpenTime < 250) return;
     if (picker.contains(e.target) || (btn && btn.contains(e.target))) {
       return;
     }
     toggleEmojiPicker(false);
   });
 
-  // 消息列表滚动时自动关闭表情包
+  // 消息列表滚动时自动关闭表情包 (仅限用户主动滚动，杜绝 scrollToBottom 与键盘重排误触发)
   const content = document.getElementById("content");
   if (content) {
+    let isUserScrollingContent = false;
+    content.addEventListener("touchstart", () => {
+      isUserScrollingContent = true;
+    }, { passive: true });
+    content.addEventListener("touchend", () => {
+      setTimeout(() => { isUserScrollingContent = false; }, 300);
+    }, { passive: true });
+    content.addEventListener("wheel", () => {
+      if (Date.now() > programmaticScrollUntil && !picker.classList.contains("hidden")) {
+        toggleEmojiPicker(false);
+      }
+    }, { passive: true });
+
     content.addEventListener("scroll", () => {
-      if (!picker.classList.contains("hidden")) {
+      // 必须是用户主动滑动且不在程序性滚动保护期内才关闭表情
+      if (isUserScrollingContent && Date.now() > programmaticScrollUntil && !picker.classList.contains("hidden")) {
         toggleEmojiPicker(false);
       }
     }, { passive: true });
   }
+
+  // 挂载全局切换函数供全局及内联调用
+  window.toggleEmojiPicker = toggleEmojiPicker;
 }
 
 // 切换表情包面板
@@ -971,12 +976,22 @@ function toggleEmojiPicker(arg) {
   const isHidden = picker.classList.contains("hidden");
   const show = forceState !== undefined ? forceState : isHidden;
 
+  // 清除未完成的收起定时器
+  if (window.emojiDismissTimer) {
+    clearTimeout(window.emojiDismissTimer);
+    window.emojiDismissTimer = null;
+  }
+
   if (show) {
+    window.emojiPickerOpenTime = Date.now();
     picker.classList.remove("hidden");
     picker.style.transform = "";
     picker.style.opacity = "";
     picker.style.transition = "";
     if (btn) btn.classList.add("active");
+
+    // 设置程序性滚动保护期 (800ms)，期间 scroll 事件不会误关表情
+    window.programmaticScrollUntil = Date.now() + 800;
     scrollToBottom();
   } else {
     picker.classList.add("hidden");
@@ -1236,6 +1251,7 @@ function initFilePaths(files) {
     info.className = "file-info";
     
     let a = document.createElement("a");
+    a.className = "file-name";
     a.href = v.path;
     a.download = v.name;
     a.title = v.name;
@@ -1253,6 +1269,7 @@ function initFilePaths(files) {
     delBtn.title = "删除此文件";
     delBtn.onclick = () => delFile(v.originalname);
 
+    item.appendChild(icon);
     item.appendChild(info);
     item.appendChild(delBtn);
     filesDom.appendChild(item);
@@ -1498,16 +1515,6 @@ function initGestureEngine() {
         if (deltaY < -35) {
           toggleRtcPanel(false);
           showAlert("已上滑收起音视频频道", "info");
-          return;
-        }
-      }
-
-      // 表情面板向下划动 -> 收起表情包
-      const emojiPicker = document.getElementById("emoji-picker");
-      const inputWrapper = document.querySelector(".chat-input-wrapper");
-      if (emojiPicker && !emojiPicker.classList.contains("hidden")) {
-        if ((emojiPicker.contains(activeTouchTarget) || (inputWrapper && inputWrapper.contains(activeTouchTarget))) && deltaY > 25) {
-          toggleEmojiPicker(false);
           return;
         }
       }

@@ -53,6 +53,17 @@ body {
   flex-direction: column;
 }
 
+a {
+  color: #38bdf8;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: #7dd3fc;
+  text-decoration: underline;
+}
+
 /* Scrollbar Customization */
 ::-webkit-scrollbar {
   width: 5px;
@@ -674,47 +685,73 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.file-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.file-icon {
+  color: #38bdf8;
+  font-size: 0.95rem;
+  flex-shrink: 0;
 }
 
 .file-info {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
+.file-info a,
 .file-name {
-  color: var(--primary);
+  color: #f1f5f9; /* 明亮清晰的白灰色，避免深色背景下深蓝色看不清 */
   text-decoration: none;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  transition: color 0.15s ease;
 }
+
+.file-info a:visited {
+  color: #e2e8f0; /* 防止浏览器将已访问链接染成深蓝/深紫色 */
+}
+
+.file-info a:hover,
 .file-name:hover {
+  color: #38bdf8; /* hover 时亮青蓝色高亮 */
   text-decoration: underline;
 }
 
 .file-date {
-  font-size: 0.68rem;
-  color: var(--text-dim);
+  font-size: 0.7rem;
+  color: #94a3b8; /* 清晰柔和的中浅灰 */
 }
 
 .file-del-btn {
-  color: var(--text-dim);
+  color: #94a3b8;
   cursor: pointer;
-  padding: 3px 5px;
+  padding: 4px 6px;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 .file-del-btn:hover {
-  color: var(--rose);
-  background: rgba(244, 63, 94, 0.1);
+  color: #fb7185;
+  background: rgba(244, 63, 94, 0.15);
 }
 
 /* Toast Notifications - Centered to avoid blocking video room and sidebar */
